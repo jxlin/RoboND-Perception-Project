@@ -136,8 +136,8 @@ def pr2_mover(object_list):
 
 if __name__ == '__main__':
 
-    # TODO: ROS node initialization
-
+    # ROS node initialization
+    rospy.init_node( 'perception_pipeline', anonymous = True )
     # TODO: Create Subscribers
 
     # TODO: Create Publishers
@@ -147,4 +147,6 @@ if __name__ == '__main__':
     # Initialize color_list
     get_color_list.color_list = []
 
-    # TODO: Spin while node is not shutdown
+    # Spin while node is not shutdown
+    while not rospy.is_shutdown() :
+        rospy.spin()
