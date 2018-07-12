@@ -7,11 +7,11 @@
 import numpy as np
 import pcl
 
-import PUtils
+from PUtils import *
 
 class PCloudClusterMakerParams :
     # DBSCAN params
-    DBSCAN_CLUSTER_TOLERANCE = 0.05
+    DBSCAN_CLUSTER_TOLERANCE = 0.07
     DBSCAN_MIN_CLUSTER_SIZE = 30
     DBSCAN_MAX_CLUSTER_SIZE = 2000
 
@@ -41,7 +41,7 @@ class PCloudClusterMaker( object ) :
     """
     def _dbscan( self, cloud ) :
         # transform the cloud to just an xyz cloud
-        _xyzCloud = PUtils.XYZRGB_to_XYZ( cloud )
+        _xyzCloud = XYZRGB_to_XYZ( cloud )
         # create a kdtree for the cluster algorithm to use
         _kdtree = _xyzCloud.make_kdtree()
         # Create cluster extractor and configure its properties
@@ -54,7 +54,7 @@ class PCloudClusterMaker( object ) :
 
     def _makeCloudForClustersViz( self, cloud, clusterIndices ) :
         # generate some colors for the clusters
-        _clusterColors = PUtils.get_color_list( len( clusterIndices ) )
+        _clusterColors = get_color_list( len( clusterIndices ) )
         # Create a list of the points for the pointcloud
         _cloudPointList = []
 
@@ -74,7 +74,6 @@ class PCloudClusterMaker( object ) :
         _cloudsClusters = []
 
         for _, indices in enumerate( clusterIndices ) :
-            _cloudSingleCluster = cloud.extract( indices )
-            _cloudsClusters.append( PUtils.pcl_to_ros( _cloudSingleCluster ) )
+            _cloudsClusters.append( cloud.extract( indices ) )
 
         return _cloudsClusters

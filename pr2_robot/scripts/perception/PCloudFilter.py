@@ -9,12 +9,12 @@ import pcl
 
 class PCloudFilterParams :
     # Voxel grid downsample params
-    VOXEL_LEAF_SIZE = ( 0.01, 0.01, 0.01 )
+    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
     # Passthrough filter params
     PASSTHROUGH_AXIS = 'z'
-    PASSTHROUGH_LIMITS = ( 0.6, 1.1 )
+    PASSTHROUGH_LIMITS = [ 0.36, 0.84 ]
     # RANSAC segmentation params
-    RANSAC_THRESHOLD = 0.02
+    RANSAC_THRESHOLD = 0.03
     # Statistical Outlier Removal (SOR) params
     SOR_MEAN_K = 50
     SOR_THRESHOLD_SCALE = 1.0
