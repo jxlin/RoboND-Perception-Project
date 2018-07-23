@@ -6,15 +6,19 @@
 
 import numpy as np
 import pcl
+import time
 
 class PCloudFilterParams :
     # Voxel grid downsample params
     VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
-    # Passthrough filter params
-    PASSTHROUGH_AXIS = 'z'
-    PASSTHROUGH_LIMITS = [ 0.36, 0.84 ]
+    # Passthrough filter params - z
+    PASSTHROUGH_AXIS_Z = 'z'
+    PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
+    # Passthrough filter params - x
+    PASSTHROUGH_AXIS_Y = 'y'
+    PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
     # RANSAC segmentation params
-    RANSAC_THRESHOLD = 0.03
+    RANSAC_THRESHOLD = 0.00545
     # Statistical Outlier Removal (SOR) params
     SOR_MEAN_K = 50
     SOR_THRESHOLD_SCALE = 1.0
@@ -33,10 +37,20 @@ class PCloudFilter ( object ) :
     :param cloud : pcl cloud data structure
     """
     def apply( self, cloud ) :
-
+        print 'START TIMING - FILTERING ******************'
+        _t1 = time.time()
         _fcloud = self._voxelGridDownsample( cloud )
+        _t2 = time.time()
         _fcloud = self._passThroughFiltering( _fcloud )
+        _t3 = time.time()
         _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
+        _t4 = time.time()
+
+        print 'downsampling: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        print 'passthroughf: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
+        print 'ransacsegmen: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
+
+        print 'END TIMING - FILTERING ********************'
 
         return _tableCloud, _objectsCloud
 
@@ -59,12 +73,19 @@ class PCloudFilter ( object ) :
     :param cloud : the cloud to apply cutting to
     """
     def _passThroughFiltering( self, cloud ) :
-        _filter = cloud.make_passthrough_filter()
-        _filter.set_filter_field_name( PCloudFilterParams.PASSTHROUGH_AXIS )
-        _filter.set_filter_limits( PCloudFilterParams.PASSTHROUGH_LIMITS[0],
-                                   PCloudFilterParams.PASSTHROUGH_LIMITS[1] )
+        _filter_z = cloud.make_passthrough_filter()
+        _filter_z.set_filter_field_name( PCloudFilterParams.PASSTHROUGH_AXIS_Z )
+        _filter_z.set_filter_limits( PCloudFilterParams.PASSTHROUGH_LIMITS_Z[0],
+                                     PCloudFilterParams.PASSTHROUGH_LIMITS_Z[1] )
 
-        return _filter.filter()
+        _fcloud = _filter_z.filter()
+
+        _filter_x = _fcloud.make_passthrough_filter()
+        _filter_x.set_filter_field_name( PCloudFilterParams.PASSTHROUGH_AXIS_Y )
+        _filter_x.set_filter_limits( PCloudFilterParams.PASSTHROUGH_LIMITS_Y[0],
+                                     PCloudFilterParams.PASSTHROUGH_LIMITS_Y[1] )
+        
+        return _filter_x.filter()
 
     """
     Applies RANSAC plane fitting to the given cloud

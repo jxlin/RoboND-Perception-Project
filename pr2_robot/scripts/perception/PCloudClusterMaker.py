@@ -11,7 +11,7 @@ from PUtils import *
 
 class PCloudClusterMakerParams :
     # DBSCAN params
-    DBSCAN_CLUSTER_TOLERANCE = 0.07
+    DBSCAN_CLUSTER_TOLERANCE = 0.025
     DBSCAN_MIN_CLUSTER_SIZE = 30
     DBSCAN_MAX_CLUSTER_SIZE = 2000
 
