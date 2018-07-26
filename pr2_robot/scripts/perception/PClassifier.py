@@ -4,6 +4,7 @@
 # of the perception pipeline
 ###
 
+import sys
 import numpy as np
 import math
 import pcl
@@ -22,6 +23,7 @@ from sklearn import metrics
 # Bins used when taking the huge dataset
 DATASET_COLOR_HIST_BINS = 255
 DATASET_NORMAL_HIST_BINS = 250
+DATASET_NUM_CLASSES = 8
 
 class PSession :
     
@@ -49,13 +51,14 @@ class PSession :
         self.gamma = 1.0
         self.C = 1.0
         self.dataPercent = 0.5
+        self.trainSize = 0
 
 
 class PClassifierSVM( object ) :
 
 
     def __init__( self ) :
-        super( PClassifier, self ).__init__()
+        super( PClassifierSVM, self ).__init__()
         
         # scaler for the inputs > zero mean and unit variance
         self.m_clfScaler = None
@@ -78,15 +81,23 @@ class PClassifierSVM( object ) :
         - C
         - gamma
         - data_percent
+
+    : param datafile : .sav file that contains the training data
     """
-    def startTraining( self ) :
+    def startTrainingSchedule( self, datafile ) :
         plt.ion()
         # load the pickle data
-        _dataSet = pickle.load( open( 'dataset.sav', 'rb' ) )
+        _dataSet = pickle.load( open( datafile, 'rb' ) )
+        # rearrange the dataset to have interlaced samples
+        _dataSetPerClasses = np.array_split( _dataSet, DATASET_NUM_CLASSES )
+        _dataSet = []
+        for i in range( len( _dataSetPerClasses[0] ) ) :
+            for j in range( DATASET_NUM_CLASSES ) :
+                _dataSet.append( _dataSetPerClasses[j][i] )
         # extract data into features and labels
         _dataFeatures = []
         _dataLabels = []
-        for _sample in _trainingSet :
+        for _sample in _dataSet :
             if np.isnan( _sample[0] ).sum() < 1 :
                 _dataFeatures.append( _sample[0] )
                 _dataLabels.append( _sample[1] )
@@ -102,14 +113,14 @@ class PClassifierSVM( object ) :
         _opts_kernel = [ 'linear' ]
         _opts_C = [ 1.0 ]
         _opts_gamma = [ 1.0 ]
-        _opts_dataPercent = [ 0.05, 0.1, 0.25, 0.5, 0.75, 1.0 ]
+        _opts_dataPercent = [ 0.1, 0.25, 0.5, 0.75, 1.0 ]
 
         for _opts in tqdm( list( itertools.product( *[ _opts_nbinsColors,
-                                                    _opts_nbinsNormals,
-                                                    _opts_kernel,
-                                                    _opts_C,
-                                                    _opts_gamma,
-                                                    _opts_dataPercent ] ) ) ) :
+                                                       _opts_nbinsNormals,
+                                                       _opts_kernel,
+                                                       _opts_C,
+                                                       _opts_gamma,
+                                                       _opts_dataPercent ] ) ) ) :
 
             _sess = PSession()
             _sess.nbinsColors = _opts[0]
@@ -118,8 +129,11 @@ class PClassifierSVM( object ) :
             _sess.C = _opts[3]
             _sess.gamma = _opts[4]
             _sess.dataPercent = _opts[5]
+            _sess.trainSize = int( _opts[5] * len( _dataFeatures ) )
 
             self._makeTrainSession( _sess )
+        
+        raw_input( 'Press enter to continue...' )
 
     """
     Makes a training session from the given session parameters
@@ -129,13 +143,21 @@ class PClassifierSVM( object ) :
     def _makeTrainSession( self, session ) :
         print( 'START SESSION: ', self._getSessionId( session ) + ' ****************' )
         # create the batch of data to use
-        _size = math.floor( session.dataPercent * len( self.m_sessionDataX ) )
+        _size = int( math.floor( session.dataPercent * len( self.m_sessionDataX ) ) )
         session.trainX = np.array( self.m_sessionDataX[0:_size] )
         session.trainY = np.array( self.m_sessionDataY[0:_size] )
-        session.trainX, session.trainY = self._generateSessionBatch( session.nbinsColors,
-                                                                     session.nbinsNormals,
-                                                                     session.trainX,
-                                                                     session.trainY )
+        session.trainX = self._generateSessionBatch( session.nbinsColors,
+                                                     session.nbinsNormals,
+                                                     session.trainX )
+                                                     
+        # print( 'shape_x_train: ', session.trainX.shape )
+        # print( 'shape_y_train: ', session.trainY.shape )
+        # print( 'X' )
+        # print( session.trainX )
+        # print( 'Y' )
+        # print( session.trainY )
+        # sys.exit( 0 )
+        
         # create input scaler ( zero mean and unit variance normalization )
         session.inScaler = StandardScaler()
         session.inScaler.fit( session.trainX )
@@ -166,15 +188,32 @@ class PClassifierSVM( object ) :
         self._showSessionResults( session )
         print( '**************************************************************' )
 
-    def _generateSessionBatch( self, nbinsColors, nbinsNormals, dataX, dataY ) :
+    """
+    Generate new samples from the given samples by ...
+    reshaping using different histograms sizes
+    """
+    def _generateSessionBatch( self, nbinsColors, nbinsNormals, dataX ) :
         # We start with a huge bag of data with ...
         # DATASET_COLOR_HIST_BINS, DATASET_NORMAL_HIST_BINS ...
         # as base size of the histograms. From there, we modify the ...
         # size according to the required sizes
-        
+        _batchX = []
+        for _x in dataX :
+            # extract color and normals histogram
+            _x_chist = _x[0:(3 * DATASET_COLOR_HIST_BINS)]
+            _x_nhist = _x[(3 * DATASET_COLOR_HIST_BINS):]
+            _x_chist_channels = np.array_split( _x_chist, 3 )
+            _x_nhist_channels = np.array_split( _x_nhist, 3 )
+            # convert each histogram channel to the desired sizes
+            _sx_chist_channels = [ hist2hist( _x_chist_channels[i], nbinsColors )
+                                   for i in range( len( _x_chist_channels ) ) ]
+            _sx_nhist_channels = [ hist2hist( _x_nhist_channels[i], nbinsNormals )
+                                   for i in range( len( _x_nhist_channels ) ) ]
+            _sx_chist = np.concatenate( _sx_chist_channels ).astype( np.float64 )
+            _sx_nhist = np.concatenate( _sx_nhist_channels ).astype( np.float64 )
+            _batchX.append( np.concatenate( [ _sx_chist, _sx_nhist ] ) )
 
-        
-        pass
+        return np.array( _batchX )
 
     def _showSessionResults( self, session ) :
         # print scores
@@ -188,9 +227,9 @@ class PClassifierSVM( object ) :
     def _getSessionId( self, session ) :
         _sessId = 'sess_'
         _sessId += 'kernel_' + session.kernel + '_'
-        _sessId += 'nc_' + session.nbinsColors + '_'
-        _sessId += 'nn_' + session.nbinsNormals + '_'
-        _sessId += 'size_' + str( len( session.trainX ) )
+        _sessId += 'nc_' + str( session.nbinsColors ) + '_'
+        _sessId += 'nn_' + str( session.nbinsNormals ) + '_'
+        _sessId += 'size_' + str( session.trainSize )
         return _sessId
 
     def _showConfusionMatrices( self, session ) :
@@ -244,7 +283,7 @@ class PClassifierSVM( object ) :
     def showSample( self, x, y, nbins_chist, nbins_nhist ) :
         # extract the histograms from the feature vector
         _x_chist = x[0:(3 * nbins_chist)]
-        _x_nhist = x[(3 * nbins_chist + 1):]
+        _x_nhist = x[(3 * nbins_chist):]
         # show histograms
         self._showHistograms( _x_chist, channels = 3, name = 'color' )
         self._showHistograms( _x_nhist, channels = 3, name = 'normal' )

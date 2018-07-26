@@ -225,18 +225,19 @@ Transforms one histogram to another
 
 : param hist : source histogram
 : param nbins : target number of bins of the transformed histogram
-: param rmin : min range for the values of the histogram
-: param rmax : max range for the values of the histogram
 """
-def hist2hist( hist, nbins, rmin, rmax ) :
+def hist2hist( hist, nbins ) :
     assert ( len( hist ) >= nbins )
 
+    _rmin = np.min( hist )
+    _rmax = np.max( hist )
+
     _newhist = np.zeros( nbins )
-    _newedges = np.linspace( rmin, rmax, num = ( nbins + 1 ), endpoint = True )
+    _newedges = np.linspace( _rmin, _rmax, num = ( nbins + 1 ), endpoint = True )
     
     # compute bin sizes, new and old, for indexing
-    _newbinsize = ( rmax - rmin ) / nbins
-    _oldbinsize = ( rmax - rmin ) / len( hist )
+    _newbinsize = ( _rmax - _rmin ) / nbins
+    _oldbinsize = ( _rmax - _rmin ) / len( hist )
 
     for i in range( nbins ) :
         _startIndx = int( math.floor( _newedges[i] / _oldbinsize ) )

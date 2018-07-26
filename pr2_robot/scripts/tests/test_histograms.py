@@ -12,8 +12,8 @@ _hist1 = normalizeHistogram( _hist1 )
 
 # _hist2 = normalizeHistogram( hist2hist( _hist1, 50, 0, 200 ) )
 # _hist3 = normalizeHistogram( hist2hist( _hist1, 25, 0, 200 ) )
-_hist2 = hist2hist( _hist1, 50, 0, 200 )
-_hist3 = hist2hist( _hist1, 25, 0, 200 )
+_hist2 = hist2hist( _hist1, 50 )
+_hist3 = hist2hist( _hist1, 25 )
 
 plotHistogram( _hist1, 0, 200 )
 plotHistogram( _hist2, 0, 200 )
