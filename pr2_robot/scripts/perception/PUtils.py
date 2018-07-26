@@ -13,9 +13,11 @@
 import rospy
 import pcl
 import numpy as np
+import math
 import ctypes
 import struct
 import sensor_msgs.point_cloud2 as pc2
+import matplotlib.pyplot as plt
 
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
@@ -215,3 +217,56 @@ def get_color_list(cluster_count):
         for i in xrange(len(get_color_list.color_list), cluster_count):
             get_color_list.color_list.append(random_color_gen())
     return get_color_list.color_list
+
+
+
+"""
+Transforms one histogram to another
+
+: param hist : source histogram
+: param nbins : target number of bins of the transformed histogram
+: param rmin : min range for the values of the histogram
+: param rmax : max range for the values of the histogram
+"""
+def hist2hist( hist, nbins, rmin, rmax ) :
+    assert ( len( hist ) >= nbins )
+
+    _newhist = np.zeros( nbins )
+    _newedges = np.linspace( rmin, rmax, num = ( nbins + 1 ), endpoint = True )
+    
+    # compute bin sizes, new and old, for indexing
+    _newbinsize = ( rmax - rmin ) / nbins
+    _oldbinsize = ( rmax - rmin ) / len( hist )
+
+    for i in range( nbins ) :
+        _startIndx = int( math.floor( _newedges[i] / _oldbinsize ) )
+        _stopIndx  = int( math.floor( _newedges[i + 1] / _oldbinsize ) - 1 )
+        _newhist[i] = hist[ _startIndx : ( _stopIndx + 1 ) ].sum()
+
+    return _newhist
+
+"""
+Plots a histogram returned from numpy.histogram
+Adapted from this post: https://stackoverflow.com/questions/5328556/histogram-matplotlib
+
+: param hist : numpy histogram
+: param rmin : min range for the values of the histogram
+: param rmax : max range for the values of the histogram
+"""
+def plotHistogram( hist, rmin, rmax ) :
+    _nbins = len( hist )
+    _bins = np.linspace( rmin, rmax, num = ( _nbins + 1 ), endpoint = True )
+    _widths = np.diff( _bins )
+    _centers = ( _bins[:-1] + _bins[1:] ) / 2.0
+    
+    plt.figure()
+    plt.bar( _centers, hist, align = 'center', width = _widths )
+    plt.xticks( _bins )
+
+"""
+Normalizes a histogram to have cumsum = 1 ( percentages instead of frequencies )
+
+: param hist : histogram to normalize
+"""
+def normalizeHistogram( hist ) :
+    return hist / float( np.sum( hist ) )
