@@ -88,32 +88,18 @@ class PClassifierSVM( object ) :
         plt.ion()
         # load the pickle data
         _dataSet = pickle.load( open( datafile, 'rb' ) )
-        # rearrange the dataset to have interlaced samples
-        _dataSetPerClasses = np.array_split( _dataSet, DATASET_NUM_CLASSES )
-        _dataSet = []
-        for i in range( len( _dataSetPerClasses[0] ) ) :
-            for j in range( DATASET_NUM_CLASSES ) :
-                _dataSet.append( _dataSetPerClasses[j][i] )
-        # extract data into features and labels
-        _dataFeatures = []
-        _dataLabels = []
-        for _sample in _dataSet :
-            if np.isnan( _sample[0] ).sum() < 1 :
-                _dataFeatures.append( _sample[0] )
-                _dataLabels.append( _sample[1] )
-
-        assert ( len( _dataFeatures ) == len( _dataLabels ) ), 'ERROR: features-labels len mismatch'
-
-        self.m_sessionDataX = _dataFeatures
-        self.m_sessionDataY = _dataLabels
+        _dataSet = self._rearrangeDataset( _dataSet )
+        self.m_sessionDataX, self.m_sessionDataY = self._splitFeaturesLabels( _dataSet )
 
         # make schedule for sessions
-        _opts_nbinsColors = [ 32, 64, 128, 255 ]
-        _opts_nbinsNormals = [ 50, 100, 150, 250 ]
+        _opts_nbinsColors = [ 32, 128, 255 ]
+        _opts_nbinsNormals = [ 50, 150, 250 ]
         _opts_kernel = [ 'linear' ]
         _opts_C = [ 1.0 ]
         _opts_gamma = [ 1.0 ]
-        _opts_dataPercent = [ 0.1, 0.25, 0.5, 0.75, 1.0 ]
+        _opts_dataPercent = [ 0.1, 0.2, 0.4, 0.8, 1.0 ]
+
+        _sessions = []
 
         for _opts in tqdm( list( itertools.product( *[ _opts_nbinsColors,
                                                        _opts_nbinsNormals,
@@ -129,11 +115,49 @@ class PClassifierSVM( object ) :
             _sess.C = _opts[3]
             _sess.gamma = _opts[4]
             _sess.dataPercent = _opts[5]
-            _sess.trainSize = int( _opts[5] * len( _dataFeatures ) )
+            _sess.trainSize = int( _opts[5] * len( _dataSet ) )
 
             self._makeTrainSession( _sess )
+            _sessions.append( _sess )
         
+        self._showTrainingScheduleResults( _sessions )
+
         raw_input( 'Press enter to continue...' )
+
+    """
+    Rearranges a dataset assumed in format [<dataC1>,<dataC2>,...,<dataC8>] such that
+    each sample appears in order [c1,c2,...,c8, c1,c2,...,c8, ...]
+
+    :param dataSet : original dataset to rearrange
+    """
+    def _rearrangeDataset( self, dataSet ) :
+        # split dataset into samples per class
+        _dataSetPerClasses = np.array_split( dataSet, DATASET_NUM_CLASSES )
+        _rdataSet = []
+        # rearrange the dataset to have interlaced samples
+        for i in range( len( _dataSetPerClasses[0] ) ) :
+            for j in range( DATASET_NUM_CLASSES ) :
+                _rdataSet.append( _dataSetPerClasses[j][i] )
+
+        return _rdataSet
+
+    """
+    Splits dataset into features and labels ( X, Y )
+
+    :param dataSet : input dataset with features and labels in it
+    """
+    def _splitFeaturesLabels( self, dataSet ) :
+        # extract data into features and labels
+        _dataFeatures = []
+        _dataLabels = []
+        for _sample in dataSet :
+            if np.isnan( _sample[0] ).sum() < 1 :
+                _dataFeatures.append( _sample[0] )
+                _dataLabels.append( _sample[1] )
+
+        assert ( len( _dataFeatures ) == len( _dataLabels ) ), 'ERROR: features-labels len mismatch'
+
+        return _dataFeatures, _dataLabels
 
     """
     Makes a training session from the given session parameters
@@ -149,18 +173,9 @@ class PClassifierSVM( object ) :
         session.trainX = self._generateSessionBatch( session.nbinsColors,
                                                      session.nbinsNormals,
                                                      session.trainX )
-                                                     
-        # print( 'shape_x_train: ', session.trainX.shape )
-        # print( 'shape_y_train: ', session.trainY.shape )
-        # print( 'X' )
-        # print( session.trainX )
-        # print( 'Y' )
-        # print( session.trainY )
-        # sys.exit( 0 )
-        
         # create input scaler ( zero mean and unit variance normalization )
-        session.inScaler = StandardScaler()
-        session.inScaler.fit( session.trainX )
+        session.inScaler = StandardScaler().fit( session.trainX )
+        session.trainX = session.inScaler.transform( session.trainX )
         # create output labels one-hot encoding
         session.outEncoder = LabelEncoder()
         session.trainY = session.outEncoder.fit_transform( session.trainY )
@@ -184,6 +199,8 @@ class PClassifierSVM( object ) :
                                                                   y = session.trainY )
         # accuracy score
         session.accuracyScore = metrics.accuracy_score( session.trainY, session.predictions )
+        # train classifier
+        session.model.fit( X = session.trainX, y = session.trainY )
         # show results
         self._showSessionResults( session )
         print( '**************************************************************' )
@@ -271,8 +288,15 @@ class PClassifierSVM( object ) :
         plt.savefig( title + '.png' )
 
     def _showTrainingScheduleResults( self, sessions ) :
-        
-        pass
+        # show results from worst to best in ascending order
+        sessions.sort( key = lambda x: x.accuracyScore, reverse = True )
+        for i in range( len( sessions ) ) :
+            print( self._getSessionId( sessions[i] ), sessions[i].accuracyScore )
+        # save session results
+        _fhandle = open( 'results.txt', 'wb' )
+        for i in range( len( sessions ) ) :
+            _fhandle.write( self._getSessionId( sessions[i] ) + ' - ' + str( sessions[i].accuracyScore ) + '\n' )
+        _fhandle.close()
 
     """
     Shows a training example. Plots the histograms for a given sample
@@ -285,17 +309,15 @@ class PClassifierSVM( object ) :
         _x_chist = x[0:(3 * nbins_chist)]
         _x_nhist = x[(3 * nbins_chist):]
         # show histograms
-        self._showHistograms( _x_chist, channels = 3, name = 'color' )
-        self._showHistograms( _x_nhist, channels = 3, name = 'normal' )
+        self._showHistograms( _x_chist, rmin = 0.0, rmax = 255.0, channels = 3, name = 'color' )
+        self._showHistograms( _x_nhist, rmin = -1.0, rmax = 1.0, channels = 3, name = 'normal' )
 
-    def _showHistograms( self, hist, channels = 3, name = 'hist' ) :
+    def _showHistograms( self, hist, rmin, rmax, channels = 3, name = 'hist' ) :
         # divide into the required number of channels
         _hchannels = np.array_split( channels )
         # plot each histogram channel
-        plt.figure()
         for i in range( channels ) :
-            plt.subplot( '13' + str( i + 1 ) )
-            plt.hist( _hchannels[i], len( _hchannels[i] ), alpha = 0.75 )
+            plotHistogram( _hchannels[i], rmin, rmax )
 
     def saveModel( self, filename ) :
         # prepare object to save
@@ -313,11 +335,42 @@ class PClassifierSVM( object ) :
         self.m_clfModel = _classifier['model']
         self.m_clfLabelEncoder = _classifier['labelEncoder']
 
-    def train( self, X, Y ) :
+    """
+    Trains the classifier on the dataset stored in the given datafile, ...
+    whose features are assumed to be stored in the form [<dataC1>,<dataC2>,...,<dataC8>]
 
-        pass
+    : param datafile : filepath to the .sav file that holds the dataset
+    """
+    def train( self, datafile, modelname = 'model' ) :
+        plt.ion()
+        # get dataset from file
+        _dataSet = pickle.load( open( datafile, 'rb' ) )
+        _dataSet = self._rearrangeDataset( _dataSet )
+        self.m_sessionDataX, self.m_sessionDataY = self._splitFeaturesLabels( _dataSet )
+        # make session
+        _sess = PSession()
+        _sess.nbinsColors = 255
+        _sess.nbinsNormals = 250
+        _sess.kernel = 'linear'
+        _sess.C = 1.0
+        _sess.gamma = 1.0
+        _sess.dataPercent = 1.0
+        _sess.trainSize = int( 1.0 * len( _dataSet ) )
+        # train and save results
+        self._makeTrainSession( _sess )
+        self.m_clfLabelEncoder = _sess.outEncoder
+        self.m_clfClasses = _sess.outEncoder.classes_
+        self.m_clfScaler = _sess.inScaler
+        self.m_clfModel = _sess.model
+        self.saveModel( modelname + '.sav' )
 
     def predict( self, x ) :
+        if self.m_clfModel is None :
+            print( 'ERROR: There is no model trained to make predictions' )
+            return
 
-        pass
+        _prediction = self.m_clfModel.predict( self.m_clfScaler.transform( x ) )
+        _label = self.m_clfLabelEncoder.inverse_transform( _prediction )
+
+        return _label
 
