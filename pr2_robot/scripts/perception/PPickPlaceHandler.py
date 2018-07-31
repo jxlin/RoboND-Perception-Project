@@ -62,7 +62,8 @@ class PPickPlaceHandler( object ) :
             self.m_dropdict[ _rosDropList[i]['group'] ]['name'] = _rosDropList[i]['name']
         
 
-    def pick( self, objectList ) :
+    def pickObjectsFromList( self, objectList ) :
+        _dicts = []
         # check which object should be picked
         for i in range( len( self.m_picklist ) ) :
             # check if the requested object is not already picked
@@ -78,7 +79,11 @@ class PPickPlaceHandler( object ) :
                 self.m_picklist[i].picked = True
                 self.m_picklist[i].centroid = self._computeCentroid( objectList[j].cloud )
                 # pick the object using the service
-                self._pickObject( self.m_picklist[i] )
+                _yamlDict = self._pickObject( self.m_picklist[i], True )
+                _dicts.append( _yamlDict )
+
+        if len( _dicts ) > 0 :
+            send_to_yaml( 'output' + str( self.m_sceneNum ) + '.yaml', _dicts )
 
     def _computeCentroid( self, cloud ) :
         # ros to pcl conversion
@@ -89,7 +94,7 @@ class PPickPlaceHandler( object ) :
         _centroid = [ np.asscalar( _npcentroid[i] ) for i in range( len( _npcentroid ) ) ]
         return _centroid
 
-    def _pickObject( self, pobject ) :
+    def _pickObject( self, pobject, callservice = True ) :
         # make service request
         _req = PickPlaceRequest()
         # scene number
@@ -103,31 +108,34 @@ class PPickPlaceHandler( object ) :
         _req.pick_pose.position.y = pobject.centroid[1]
         _req.pick_pose.position.z = pobject.centroid[2]
         # drop position
-        _req.place_pose.position.x = self.m_dropdict[ pobject.group ]['position'].x
-        _req.place_pose.position.y = self.m_dropdict[ pobject.group ]['position'].y
-        _req.place_pose.position.z = self.m_dropdict[ pobject.group ]['position'].z
+        _req.place_pose.position.x = self.m_dropdict[ pobject.group ]['position'][0]
+        _req.place_pose.position.y = self.m_dropdict[ pobject.group ]['position'][1]
+        _req.place_pose.position.z = self.m_dropdict[ pobject.group ]['position'][2]
         # save yaml dict
         _yamlDict = make_yaml_dict( _req.test_scene_num,
                                     _req.arm_name,
                                     _req.object_name,
                                     _req.pick_pose,
                                     _req.place_pose )
-        send_to_yaml( 'output' + str( self.m_sceneNum ) + '.yaml', _yamlDict )
         ## Send pick and place request ##########################################################
-        # Wait for 'pick_place_routine' service to come up
-        rospy.wait_for_service( 'pick_place_routine' )
 
-        try:
-            pick_place_routine = rospy.ServiceProxy( 'pick_place_routine', PickPlace )
+        if callservice :
+            # Wait for 'pick_place_routine' service to come up
+            rospy.wait_for_service( 'pick_place_routine' )
+            try:
+                pick_place_routine = rospy.ServiceProxy( 'pick_place_routine', PickPlace )
 
-            resp = pick_place_routine( _req.test_scene_num, 
-                                       _req.object_name,
-                                       _req.arm_name, 
-                                       _req.pick_pose, 
-                                       _req.place_pose )
+                resp = pick_place_routine( _req.test_scene_num, 
+                                        _req.object_name,
+                                        _req.arm_name, 
+                                        _req.pick_pose, 
+                                        _req.place_pose )
 
-            print ( "Response: ", resp.success )
+                print ( "Response: ", resp.success )
 
-        except rospy.ServiceException, e:
-            print "Service call failed: %s"%e
+            except rospy.ServiceException, e:
+                print "Service call failed: %s"%e
+
         #########################################################################################
+
+        return _yamlDict

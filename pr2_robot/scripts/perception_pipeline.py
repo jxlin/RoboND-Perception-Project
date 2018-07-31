@@ -128,7 +128,7 @@ class PPipeline( object ) :
             # Add the detected object to the list of detected objects
             _do = DetectedObject()
             _do.label = _predictedLabel
-            _do.cloud = _objCloud
+            _do.cloud = _rosObjCloud
             _detectedObjects.append( _do )
 
         rospy.loginfo( 'Detected {} objects: {}'.format( len( _detectedObjectsLabels ), _detectedObjectsLabels ) )
@@ -140,13 +140,9 @@ class PPipeline( object ) :
         # Could add some logic to determine whether or not your object detections are robust
         # before calling pr2_mover()
         try:
-            pr2_mover( detected_objects_list )
+            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects )
         except rospy.ROSInterruptException:
             pass
-
-# function to load parameters and request PickPlace service
-def pr2_mover( object_list ) :
-    g_pipeline.pick( object_list )
 
 if __name__ == '__main__':
     # ROS node initialization
