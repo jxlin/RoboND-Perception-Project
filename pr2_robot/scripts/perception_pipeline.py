@@ -58,6 +58,10 @@ class PPipeline( object ) :
         self.m_pubVizClusters = rospy.Publisher( '/pipeline/clustering/clusters',
                                                  PointCloud2,
                                                  queue_size = 1 )
+        # dummy cloud for some tests
+        self.m_pubVizDummyCloud = rospy.Publisher( '/pipeline/dummy',
+                                                   PointCloud2,
+                                                   queue_size = 1 )
         # publisher to send the markers for the detected objects
         self.m_pubVizObjectsMarkers = rospy.Publisher( '/pipeline/classification/objectMarkers',
                                                        Marker,
@@ -85,6 +89,7 @@ class PPipeline( object ) :
         # SEGMENTATION AND CLUSTERING ###################################
 
         # apply segmentation
+        # _tableCloud, _objectsCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
         _tableCloud, _objectsCloud = self.m_cloudFilterer.apply( _cloudPcl )
         # apply clusterer
         _clustersClouds, _clustersCloudViz = self.m_cloudClusterer.cluster( _objectsCloud )
@@ -140,7 +145,7 @@ class PPipeline( object ) :
         # Could add some logic to determine whether or not your object detections are robust
         # before calling pr2_mover()
         try:
-            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects )
+            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = False )
         except rospy.ROSInterruptException:
             pass
 

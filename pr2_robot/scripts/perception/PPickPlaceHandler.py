@@ -62,7 +62,7 @@ class PPickPlaceHandler( object ) :
             self.m_dropdict[ _rosDropList[i]['group'] ]['name'] = _rosDropList[i]['name']
         
 
-    def pickObjectsFromList( self, objectList ) :
+    def pickObjectsFromList( self, objectList, callservice = False, savetofile = True ) :
         _dicts = []
         # check which object should be picked
         for i in range( len( self.m_picklist ) ) :
@@ -79,10 +79,10 @@ class PPickPlaceHandler( object ) :
                 self.m_picklist[i].picked = True
                 self.m_picklist[i].centroid = self._computeCentroid( objectList[j].cloud )
                 # pick the object using the service
-                _yamlDict = self._pickObject( self.m_picklist[i], True )
+                _yamlDict = self._pickObject( self.m_picklist[i], callservice = callservice )
                 _dicts.append( _yamlDict )
 
-        if len( _dicts ) > 0 :
+        if savetofile and ( len( _dicts ) > 0 ) :
             send_to_yaml( 'output' + str( self.m_sceneNum ) + '.yaml', _dicts )
 
     def _computeCentroid( self, cloud ) :
@@ -94,7 +94,7 @@ class PPickPlaceHandler( object ) :
         _centroid = [ np.asscalar( _npcentroid[i] ) for i in range( len( _npcentroid ) ) ]
         return _centroid
 
-    def _pickObject( self, pobject, callservice = True ) :
+    def _pickObject( self, pobject, callservice ) :
         # make service request
         _req = PickPlaceRequest()
         # scene number

@@ -8,6 +8,8 @@ import numpy as np
 import pcl
 import time
 
+from PUtils import *
+
 class PCloudFilterParams :
     # Voxel grid downsample params
     VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
@@ -35,8 +37,9 @@ class PCloudFilter ( object ) :
     returns the table and objects clouds
 
     :param cloud : pcl cloud data structure
+    :param optpub : optional publisher to send cloud to
     """
-    def apply( self, cloud ) :
+    def apply( self, cloud, optpub = None ) :
         print 'START TIMING - FILTERING ******************'
         _t1 = time.time()
         _fcloud = self._denoise( cloud )
@@ -44,6 +47,8 @@ class PCloudFilter ( object ) :
         _fcloud = self._voxelGridDownsample( _fcloud )
         _t3 = time.time()
         _fcloud = self._passThroughFiltering( _fcloud )
+        if optpub is not None :
+            optpub.publish( pcl_to_ros( _fcloud ) )
         _t4 = time.time()
         _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
         _t5 = time.time()
