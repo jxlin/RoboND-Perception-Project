@@ -1,7 +1,9 @@
 .vscode
 *.pyc
 *.pyo
-*.png
+pr2_robot/scripts/tests/_results
+pr2_robot/scripts/tests/Confusion*
+pr2_robot/scripts/tests/Normalized*
 *.sav
 *.swp
 *.swo
