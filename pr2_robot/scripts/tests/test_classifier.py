@@ -1,8 +1,8 @@
 import sys
-sys.path.insert( 0, '../perception/' )
+sys.path.insert( 0, '../' )
 
-from PClassifier import *
+from perception.PClassifierSVM import *
 
 _classifier = PClassifierSVM()
-_classifier.startTrainingSchedule( '../../data/training_set_1000.sav' )
-# _classifier.train( '../../data/training_set_100.sav', 'model_100' )
+# _classifier.startTrainingSchedule( '../../data/training_set_1000.sav' )
+_classifier.train( '../../data/training_set_2000.sav', 'model_c255_n250_2000' )

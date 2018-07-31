@@ -9,6 +9,7 @@
 
 import os
 import sys
+sys.path.insert( 0, '../' )
 import threading
 import numpy as np
 import rospy
@@ -125,14 +126,18 @@ class PParameterTunerUI( QWidget ) :
     def _makeUI( self ) :
         _ui_vbox = QVBoxLayout()
 
+        self.m_sldFilterSORmeanK = self._makeSlider( 5.0, 20.0, 10, 'SORmeanK' )
+        self.m_sldFilterSORthresholdScale = self._makeSlider( 0.001, 0.1, 0.05, 'SORthresholdScale' )
+
+        _ui_vbox.addLayout( self.m_sldFilterSORmeanK.getLayout() )
+        _ui_vbox.addLayout( self.m_sldFilterSORthresholdScale.getLayout() )
+
         self.m_sldFilterLeafSize = self._makeSlider( 0.001, 0.1, 0.01, 'LeafSize' )
         self.m_sldFilterCutMinZ = self._makeSlider( -2, 2 , 0.608, 'CutMinZ' )
         self.m_sldFilterCutMaxZ = self._makeSlider( -2, 2 , 0.88, 'CutMaxZ' )
         self.m_sldFilterCutMinY = self._makeSlider( -2, 2 , -0.456, 'CutMinY' )
         self.m_sldFilterCutMaxY = self._makeSlider( -2, 2 , 0.456, 'CutMaxY' )
         self.m_sldFilterRansacThreshold = self._makeSlider( 0.001, 0.1, 0.00545, 'RansacThreshold' )
-        self.m_sldFilterSORmeanK = self._makeSlider( 10.0, 100.0, 50, 'SORmeanK' )
-        self.m_sldFilterSORthresholdScale = self._makeSlider( 0.1, 2.0, 1.0, 'SORthresholdScale' )
 
         _ui_vbox.addLayout( self.m_sldFilterLeafSize.getLayout() )
         _ui_vbox.addLayout( self.m_sldFilterCutMinZ.getLayout() )
@@ -140,8 +145,6 @@ class PParameterTunerUI( QWidget ) :
         _ui_vbox.addLayout( self.m_sldFilterCutMinY.getLayout() )
         _ui_vbox.addLayout( self.m_sldFilterCutMaxY.getLayout() )
         _ui_vbox.addLayout( self.m_sldFilterRansacThreshold.getLayout() )
-        _ui_vbox.addLayout( self.m_sldFilterSORmeanK.getLayout() )
-        _ui_vbox.addLayout( self.m_sldFilterSORthresholdScale.getLayout() )
 
         self.m_sldClusteringClusterTolerance = self._makeSlider( 0.01, 1, 0.025, 'ClusterTolerance' )
         self.m_sldClusteringMinClusterSize = self._makeSlider( 10.0, 1000.0, 30, 'MinClusterSize' )
@@ -180,7 +183,7 @@ class PParameterTunerUI( QWidget ) :
     def _onSliderValueChanged( self ) :
         # acquire permission to change the slider values
         self.m_lock.acquire( True )
-        
+
         if self.m_sldFilterLeafSize :
             self.m_sldFilterLeafSize._updateValue()
         if self.m_sldFilterCutMinZ :
@@ -193,6 +196,7 @@ class PParameterTunerUI( QWidget ) :
             self.m_sldFilterCutMaxY._updateValue()
         if self.m_sldFilterRansacThreshold :
             self.m_sldFilterRansacThreshold._updateValue()
+
         if self.m_sldFilterSORmeanK :
             self.m_sldFilterSORmeanK._updateValue()
         if self.m_sldFilterSORthresholdScale :
@@ -334,8 +338,9 @@ class PParameterTunerUI( QWidget ) :
             PCloudFilterParams.PASSTHROUGH_LIMITS_Y[1] = self.m_sldFilterCutMaxY.getValue()
         if self.m_sldFilterRansacThreshold :
             PCloudFilterParams.RANSAC_THRESHOLD = self.m_sldFilterRansacThreshold.getValue()
+
         if self.m_sldFilterSORmeanK :
-            PCloudFilterParams.SOR_MEAN_K = self.m_sldFilterSORmeanK.getValue()
+            PCloudFilterParams.SOR_MEAN_K = int( self.m_sldFilterSORmeanK.getValue() )
         if self.m_sldFilterSORthresholdScale :
             PCloudFilterParams.SOR_THRESHOLD_SCALE = self.m_sldFilterSORthresholdScale.getValue()
 

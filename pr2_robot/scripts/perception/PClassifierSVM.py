@@ -323,7 +323,8 @@ class PClassifierSVM( object ) :
         # prepare object to save
         _classifier = { 'model' : self.m_clfModel, 
                         'classes' : self.m_clfClasses, 
-                        'scaler' : self.m_clfScaler }
+                        'scaler' : self.m_clfScaler,
+                        'labelEncoder' : self.m_clfLabelEncoder }
         # dump it into a saved object
         pickle.dump( _classifier, open( filename, 'wb' ) )
 
@@ -356,12 +357,14 @@ class PClassifierSVM( object ) :
         _sess.gamma = 1.0
         _sess.dataPercent = 1.0
         _sess.trainSize = int( 1.0 * len( _dataSet ) )
-        # train and save results
+        # train using session
         self._makeTrainSession( _sess )
+        # copy results back to model object
         self.m_clfLabelEncoder = _sess.outEncoder
         self.m_clfClasses = _sess.outEncoder.classes_
         self.m_clfScaler = _sess.inScaler
         self.m_clfModel = _sess.model
+        # save the model for later usage
         self.saveModel( modelname + '.sav' )
 
     def predict( self, x ) :
@@ -370,7 +373,7 @@ class PClassifierSVM( object ) :
             return
 
         _prediction = self.m_clfModel.predict( self.m_clfScaler.transform( x ) )
-        _label = self.m_clfLabelEncoder.inverse_transform( _prediction )
+        _label = self.m_clfLabelEncoder.inverse_transform( _prediction )[0]
 
         return _label
 

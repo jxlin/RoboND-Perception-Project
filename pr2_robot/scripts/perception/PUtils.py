@@ -17,12 +17,14 @@ import math
 import ctypes
 import struct
 import sensor_msgs.point_cloud2 as pc2
+import matplotlib.colors
 import matplotlib.pyplot as plt
 
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Header
 from random import randint
-
+from rospy_message_converter import message_converter
+import yaml
 
 def random_color_gen():
     """ Generates a random color
@@ -218,7 +220,26 @@ def get_color_list(cluster_count):
             get_color_list.color_list.append(random_color_gen())
     return get_color_list.color_list
 
+# Helper function to create a yaml friendly dictionary from ROS messages
+def make_yaml_dict(test_scene_num, arm_name, object_name, pick_pose, place_pose):
+    yaml_dict = {}
+    yaml_dict["test_scene_num"] = test_scene_num.data
+    yaml_dict["arm_name"]  = arm_name.data
+    yaml_dict["object_name"] = object_name.data
+    yaml_dict["pick_pose"] = message_converter.convert_ros_message_to_dictionary(pick_pose)
+    yaml_dict["place_pose"] = message_converter.convert_ros_message_to_dictionary(place_pose)
+    return yaml_dict
 
+# Helper function to output to yaml file
+def send_to_yaml(yaml_filename, dict_list):
+    data_dict = {"object_list": dict_list}
+    with open(yaml_filename, 'w') as outfile:
+        yaml.dump(data_dict, outfile, default_flow_style=False)
+
+#############################################################################
+#   Some extra helper functions needed for the perception pipeline
+#   Author: Wilbert Pumacay - a.k.a Daru
+#############################################################################
 
 """
 Transforms one histogram to another
@@ -271,3 +292,98 @@ Normalizes a histogram to have cumsum = 1 ( percentages instead of frequencies )
 """
 def normalizeHistogram( hist ) :
     return hist / float( np.sum( hist ) )
+
+#############################################################################
+#   Some extra helper functions needed for the perception pipeline
+#   Author: Wilbert Pumacay - a.k.a Daru
+#############################################################################
+
+"""
+Converts a list of rgb values to a list of hsv values
+
+: param rgbList : rgb list ( 0 - 255 ) to convert to hsv
+"""
+def rgb2hsv( rgbList ) :
+    _rgbNormalized = [ 1.0 * rgbList[0] / 255, 
+                       1.0 * rgbList[1] / 255, 
+                       1.0 * rgbList[2] / 255 ]
+    _hsvNormalized = matplotlib.colors.rgb_to_hsv( [ [ _rgbNormalized ] ] )[0][0]
+    return _hsvNormalized
+
+"""
+Computes a normalized feature vector ...
+from the histograms of the buffers in buffer_list
+
+:param buffer_list: a list of the buffers to use for the histograms
+:param nbins: number of bins to generate the histograms
+"""
+def _featuresFromBuffers( buffer_list, nbins, ranges ) :
+    # compute histograms
+    _hists = []
+    for _buffer in buffer_list :
+        _hist, _ = np.histogram( _buffer, bins = nbins, range = ranges )
+        _hists.append( _hist )
+    
+    # concatenate into single feature vector
+    _featureVector = np.concatenate( _hists ).astype( np.float64 )
+
+    # normalize feature vector
+    _normalizedFeatureVector = _featureVector / np.sum( _featureVector )
+
+    return _normalizedFeatureVector
+
+"""
+Computes a feature vector from the color histograms of the given cloud
+
+:param cloud : ros cloud with color information on it
+:param using_hsv : flag to whether or not to use hsv colorspace instead
+:param nbins : number of bins to use as the size of the histogram
+"""
+def computeColorHistograms(cloud, using_hsv=True, nbins = 255):
+    point_colors_list = []
+
+    # Step through each point in the point cloud
+    for point in pc2.read_points( cloud, skip_nans = True ) :
+        rgb_list = float_to_rgb( point[3] )
+        if using_hsv :
+            point_colors_list.append( rgb2hsv( rgb_list ) * 255 )
+        else :
+            point_colors_list.append( rgb_list )
+
+    # Populate lists with color values
+    channel_1_vals = []
+    channel_2_vals = []
+    channel_3_vals = []
+
+    for color in point_colors_list:
+        channel_1_vals.append( color[0] )
+        channel_2_vals.append( color[1] )
+        channel_3_vals.append( color[2] )
+    
+    # Compute feature vector - use 0 to 255 as range
+    normed_features = _featuresFromBuffers( [ channel_1_vals, channel_2_vals, channel_3_vals ], nbins, ( 0., 255. ) )
+
+    return normed_features 
+
+"""
+Computes a feature vector from the normals histograms of the given cloud
+
+:param cloud : ros cloud with normals information on it
+:param nbins : number of bins to use as the size of the histogram
+"""
+def computeNormalHistograms( normal_cloud, nbins = 250 ):
+    norm_x_vals = []
+    norm_y_vals = []
+    norm_z_vals = []
+
+    for norm_component in pc2.read_points( normal_cloud,
+                                           field_names = ( 'normal_x', 'normal_y', 'normal_z' ),
+                                           skip_nans = True ):
+        norm_x_vals.append( norm_component[0] )
+        norm_y_vals.append( norm_component[1] )
+        norm_z_vals.append( norm_component[2] )
+
+    # Compute feature vector - use -1 to 1 as range
+    normed_features = _featuresFromBuffers( [ norm_x_vals, norm_y_vals, norm_z_vals ], nbins, ( -1., 1. ) )
+
+    return normed_features

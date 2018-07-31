@@ -1,8 +1,8 @@
-
-###
-# This helper module implements the necessary ...
-# clustering steps to be applied to our filtered point cloud
-###
+#############################################################################
+#   This helper module implements the necessary ...
+#   clustering steps to be applied to our filtered point cloud
+#   Author: Wilbert Pumacay - a.k.a Daru
+#############################################################################
 
 import numpy as np
 import pcl

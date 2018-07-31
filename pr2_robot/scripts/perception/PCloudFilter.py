@@ -1,8 +1,8 @@
-
-###
-# This helper module implements the necessary ...
-# filtering steps to be applied to our point clouds
-###
+#############################################################################
+#   This helper module implements the necessary ...
+#   filtering steps to be applied to our point clouds
+#   Author: Wilbert Pumacay - a.k.a Daru
+#############################################################################
 
 import numpy as np
 import pcl
@@ -20,8 +20,8 @@ class PCloudFilterParams :
     # RANSAC segmentation params
     RANSAC_THRESHOLD = 0.00545
     # Statistical Outlier Removal (SOR) params
-    SOR_MEAN_K = 50
-    SOR_THRESHOLD_SCALE = 1.0
+    SOR_MEAN_K = 5
+    SOR_THRESHOLD_SCALE = 0.001
 
     
 
@@ -39,16 +39,19 @@ class PCloudFilter ( object ) :
     def apply( self, cloud ) :
         print 'START TIMING - FILTERING ******************'
         _t1 = time.time()
-        _fcloud = self._voxelGridDownsample( cloud )
+        _fcloud = self._denoise( cloud )
         _t2 = time.time()
-        _fcloud = self._passThroughFiltering( _fcloud )
+        _fcloud = self._voxelGridDownsample( _fcloud )
         _t3 = time.time()
-        _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
+        _fcloud = self._passThroughFiltering( _fcloud )
         _t4 = time.time()
+        _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
+        _t5 = time.time()
 
         print 'downsampling: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
         print 'passthroughf: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
         print 'ransacsegmen: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
+        print 'ransacsegmen: ', ( ( _t5 - _t4 ) * 1000 ), ' ms'
 
         print 'END TIMING - FILTERING ********************'
 
