@@ -17,6 +17,8 @@
 [img_cutting]: imgs/img_cutting.png
 [img_ransac]: imgs/img_ransac.png
 
+[img_sor_intuition]: imgs/img_sor_intuition.png
+[img_voxelgrid_intuition]: imgs/img_voxelgrid_intuition.png
 
 ## **About the project**
 
@@ -67,6 +69,8 @@ The initial cloud has quite some noise that might get in the way. So, the first 
 
 The way the filter works is by checking a number of neighboring points around each point of the pointcloud, and checking which of these points is at a given multiple of the standard deviation of the group analized. The ones that are closer than that measure are kept and the others are removed ( outliers ). More information can be found [**here**](http://pointclouds.org/documentation/tutorials/statistical_outlier.php).
 
+![SOR intuition][img_sor_intuition]
+
 The parameters we have to set for this filter are the **number of neighbors** to analyze of each point, and the **factor** of the standard deviation to use for the threshold.
 
 The call to the pcl function is located in the **_denoise** method in the [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file, and uses some tuned parameters for the filter options.
@@ -94,8 +98,13 @@ The call to the pcl function is located in the **_denoise** method in the [**PCl
 
 One way to save computation is working in a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud to make further computations.
 
-The filter that we used in this step of the pipeline is the **Voxel-grid Downsampling** filter from **pcl**, which allowed us to downsample the cloud by replacing the points inside a voxel by a single point. Basically, we are placing a grid of voxels of certain size around the pointcloud and replacing the points inside a voxel by a single representative point.
+![Downsample filtering][img_downsampling]
 
+The filter that we used in this step of the pipeline is the **Voxel-grid Downsampling** filter from **pcl**, which allowed us to downsample the cloud by replacing the points inside a voxel by a single point. Basically, we are placing a grid of voxels of certain size ( **leaf size** ) around the pointcloud and replacing the points inside a voxel by a single representative point.
+
+![VOXELGRID intuition][img_voxelgrid_intuition]
+
+We used the **pcl**'s voxelgrid filter, which is used in the **_voxelGridDownsample** method in the [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file, with some tuned leaf sizes.
 
 ```python
     # Voxel grid downsample params
@@ -117,9 +126,14 @@ The filter that we used in this step of the pipeline is the **Voxel-grid Downsam
         return _filter.filter()
 ```
 
-![Downsample filtering][img_downsampling]
 
 ### 3. _**Cutting**_
+
+The next step in the pipeline is to isolate the objects and the tabletop in a single cloud, which involves removing all other points related to other elements.
+
+To do this, the simplest technique is to use some information of the scene, which in this case is that the objects are in certain region in front of the robot. This allows us to basically **cut** that region and keep only those points for later usage.
+
+The filter that implements this is the **Passthrough** filter, which cuts a whole **region** along a certain **axis** ( two more parameters to choose ).
 
 ![Passthrough filtering][img_cutting]
 
