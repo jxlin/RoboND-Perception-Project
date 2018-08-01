@@ -6,6 +6,7 @@
 
 import numpy as np
 import pcl
+import time
 
 from PUtils import *
 
@@ -23,7 +24,12 @@ class PCloudClusterMaker( object ) :
 
     def cluster( self, cloud ) :
         # Apply dbscan get the cluster indices
+        print 'START TIMING - CLUSTERING ******************'
+        _t1 = time.time()
         _clusterIndices = self._dbscan( cloud )
+        _t2 = time.time()
+        print 'dbscan: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        print 'END TIMING - CLUSTERING ********************'
         # Create a cloud with colors for each cluster
         _cloudClustersColored = self._makeCloudForClustersViz( cloud,
                                                                _clusterIndices )
@@ -46,6 +52,7 @@ class PCloudClusterMaker( object ) :
         _kdtree = _xyzCloud.make_kdtree()
         # Create cluster extractor and configure its properties
         _dbscanExtractor = _xyzCloud.make_EuclideanClusterExtraction()
+        _dbscanExtractor.set_SearchMethod( _kdtree )
         _dbscanExtractor.set_ClusterTolerance( PCloudClusterMakerParams.DBSCAN_CLUSTER_TOLERANCE )
         _dbscanExtractor.set_MinClusterSize( PCloudClusterMakerParams.DBSCAN_MIN_CLUSTER_SIZE )
         _dbscanExtractor.set_MaxClusterSize( PCloudClusterMakerParams.DBSCAN_MAX_CLUSTER_SIZE )

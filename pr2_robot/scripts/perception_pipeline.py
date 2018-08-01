@@ -3,6 +3,7 @@
 # Some libraries needed
 import rospy
 import numpy as np
+import time
 import pickle
 import sklearn
 # sensor stick package functionality
@@ -105,9 +106,10 @@ class PPipeline( object ) :
         # ###############################################################
 
         # CLASSIFICATION ################################################
-
+        print 'START TIMING - CLASSIFICATION ******************'
         _detectedObjectsLabels = []
         _detectedObjects = []
+        _t1 = time.time()
         for i in range( len( _clustersClouds ) ) :
             # get a specific object cloud
             _objCloud = _clustersClouds[i]
@@ -135,7 +137,9 @@ class PPipeline( object ) :
             _do.label = _predictedLabel
             _do.cloud = _rosObjCloud
             _detectedObjects.append( _do )
-
+        _t2 = time.time()
+        print 'classification: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        print 'END TIMING - CLASSIFICATION ******************'
         rospy.loginfo( 'Detected {} objects: {}'.format( len( _detectedObjectsLabels ), _detectedObjectsLabels ) )
         # Publish the list of detected objects
         self.m_pubDetectedObjects.publish( _detectedObjects )

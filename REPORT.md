@@ -19,6 +19,11 @@
 
 [img_sor_intuition]: imgs/img_sor_intuition.png
 [img_voxelgrid_intuition]: imgs/img_voxelgrid_intuition.png
+[img_passthrough_intuition]: imgs/img_passthrough_intuition.png
+[img_ransac_intuition]: imgs/img_ransac_intuition.png
+[img_cut_regions]: imgs/img_cut_regions.png
+
+[img_clustering]: imgs/img_clustering.png
 
 ## **About the project**
 
@@ -59,7 +64,7 @@ The steps implemented are the following :
 *   Region cutting using **Passthrough Filtering**
 *   Plane fitting using **RANSAC**
 
-This filters are already implemented in the **pcl** library, and we used them using the **python-pcl** bindings. The implementation of the filtering pipeline can be found in the file [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py).
+This filters are already implemented in the **pcl** library, and we used them with the **python-pcl** bindings. The implementation of the filtering pipeline can be found in the file [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py).
 
 ### 1. _**Noise removal**_
 
@@ -96,7 +101,7 @@ The call to the pcl function is located in the **_denoise** method in the [**PCl
 
 ### 2. _**Downsampling**_
 
-One way to save computation is working in a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud to make further computations.
+One way to save computation is working in a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud for the next stages of the pipeline.
 
 ![Downsample filtering][img_downsampling]
 
@@ -133,9 +138,17 @@ The next step in the pipeline is to isolate the objects and the tabletop in a si
 
 To do this, the simplest technique is to use some information of the scene, which in this case is that the objects are in certain region in front of the robot. This allows us to basically **cut** that region and keep only those points for later usage.
 
+![Passthrough filtering][img_cutting]
+
 The filter that implements this is the **Passthrough** filter, which cuts a whole **region** along a certain **axis** ( two more parameters to choose ).
 
-![Passthrough filtering][img_cutting]
+![Passthrough intuition][img_passthrough_intuition]
+
+In our case we used two filters along two different axes, which allowed us to remove the small portions of the left and right table that appeared in the pointcloud.
+
+![Passthrough regions][img_cut_regions]
+
+We used 2 pcl's passthrough filter in this step ( **z** and **y** axes ) with limits tuned according to the scene. This implementation can be found in the **_passThroughFiltering** method in the [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file.
 
 ```python
     # Passthrough filter params - z
@@ -170,7 +183,19 @@ The filter that implements this is the **Passthrough** filter, which cuts a whol
 
 ### 4. _**RANSAC**_
 
+The last step to get a cloud of only the objects in the table is to remove the table from the pointcloud. This can be achieved by extracting the points in the cloud that best fit a plane, which is the actual table ( again, using some information of the scene, as we know the table is a plane ).
+
+The problem is that if we fit a plane to the whole cloud using something like least squares, we would end up fitting a plane that would go through the pointcloud in "**average**", which kind of like cuts the cloud in the middle.
+
+To avoid this, we used the **RANdom SAmple Consensus** paradigm, which instead of fitting to the whole cloud, it fits to a smaller set that is in consensus with a given calculated plane. For more information, check [**this**](http://pointclouds.org/documentation/tutorials/random_sample_consensus.php) post.
+
+![RANSAC intuition][img_ransac_intuition]
+
+We made use of pcl's **RANSAC segmenter** with a parameter that represents the threshold for the consensus set, and got the following results ( extracted the table from the pointcloud, and then removed the table from cloud ).
+
 ![RANSAC fitting][img_ransac]
+
+The implementation of this step can be found in the **_ransacSegmentation** method, in the [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file.
 
 ```python
     # RANSAC segmentation params
@@ -197,15 +222,97 @@ The filter that implements this is the **Passthrough** filter, which cuts a whol
         return _tableCloud, _objectsCloud
 ```
 
-### 5. _**Parameter Tuning**_
+## **Segmentation using Euclidean Clustering**
 
-The previous filters mentioned had some parameters that had to be tuned in order to work correctly in the new setup. This is why we implemented a GUI tool to allow picking these parameters interactively.
+The filtering portion of the pipeline gave us a filtered cloud that contains only points that belong to the objects on top of the table. The next step is to cluster this cloud into subclouds, each belonging to a single object.
+
+Here we make use of the DBSCAN algorithm, also called Euclidean Clustering ( check [**here**](https://en.wikipedia.org/wiki/DBSCAN) and [**here**](https://www.naftaliharris.com/blog/visualizing-dbscan-clustering/) for further info ), which allows us to cluster a group of datapoints by closeness ( distance ) and density, without specifying the number of cluster in the set.
+
+![DBSCAN clustering][img_clustering]
+
+We used the pcl's [**Euclidean Clustering**](http://pointclouds.org/documentation/tutorials/cluster_extraction.php) algorithm, which makes use of a **kdtree** for faster search, and has 3 parameters to tune.
+
+*   Tolerance : distance a point can be to another to consider it neighbor in the cluster.
+*   Min cluster size : minimum number of points that a cluster can have.
+*   Max cluster size : maximum number of points that a cluster can have.
+
+The implementation of this step of the pipeline can be found in the [**PCloudClusterMaker.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudClusterMaker.py) file, in the **_dbscan** method.
+
+```python
+
+    # DBSCAN params
+    DBSCAN_CLUSTER_TOLERANCE = 0.025
+    DBSCAN_MIN_CLUSTER_SIZE = 30
+    DBSCAN_MAX_CLUSTER_SIZE = 2000
+
+    # ...
+
+    """
+    Applies Euclidean Clustering to the given cloud and ...
+    returns the cluster indices
+
+    :param cloud : the cloud to apply the clustering to
+    """
+    def _dbscan( self, cloud ) :
+        # transform the cloud to just an xyz cloud
+        _xyzCloud = XYZRGB_to_XYZ( cloud )
+        # create a kdtree for the cluster algorithm to use
+        _kdtree = _xyzCloud.make_kdtree()
+        # Create cluster extractor and configure its properties
+        _dbscanExtractor = _xyzCloud.make_EuclideanClusterExtraction()
+        _dbscanExtractor.set_SearchMethod( _kdtree )
+        _dbscanExtractor.set_ClusterTolerance( PCloudClusterMakerParams.DBSCAN_CLUSTER_TOLERANCE )
+        _dbscanExtractor.set_MinClusterSize( PCloudClusterMakerParams.DBSCAN_MIN_CLUSTER_SIZE )
+        _dbscanExtractor.set_MaxClusterSize( PCloudClusterMakerParams.DBSCAN_MAX_CLUSTER_SIZE )
+
+        return _dbscanExtractor.Extract()
+```
+
+
+## **Parameter Tuning**
+
+The filters and clusterer mentioned earlier had some parameters that had to be tuned in order to work correctly in the new setup. This is why we implemented a GUI tool to allows picking these parameters interactively.
 
 ![FILTERS TUNING TOOL][gif_filters_tuning]
 
-## **Segmentation using Euclidean Clustering**
+We reused some of the code made for the previous [**Kinematics**](https://github.com/wpumacay/RoboND-Kinematics-Project/blob/master/kuka_arm/scripts/utils/RIKpublisherUI.py) project; linked it to our actual perception pipeline, and made the GUI have control over the parameters of the pipeline, exposed as global static variables ( both sets of parameters can be found in the corresponding [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) and [**PCloudClusterMaker.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudClusterMaker.py) files )
 
+```python
 
+# PCloudFilter.py
+
+class PCloudFilterParams :
+    # Voxel grid downsample params
+    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+    # Passthrough filter params - z
+    PASSTHROUGH_AXIS_Z = 'z'
+    PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
+    # Passthrough filter params - x
+    PASSTHROUGH_AXIS_Y = 'y'
+    PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
+    # RANSAC segmentation params
+    RANSAC_THRESHOLD = 0.00545
+    # Statistical Outlier Removal (SOR) params
+    SOR_MEAN_K = 5
+    SOR_THRESHOLD_SCALE = 0.001
+
+# PCloudClusterMaker.py
+
+class PCloudClusterMakerParams :
+    # DBSCAN params
+    DBSCAN_CLUSTER_TOLERANCE = 0.025
+    DBSCAN_MIN_CLUSTER_SIZE = 30
+    DBSCAN_MAX_CLUSTER_SIZE = 2000
+
+```
+
+The implementation of the tool can be found in the [**PParameterTunerUI.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PParameterTunerUI.py) file. 
+
+Also, we checked the time cost that each step took ( just in case ), and got the following costs :
+
+*   **Filtering** : _Denoising_ ~ 1300ms, _Downsampling_ ~ 36ms, _Passthrough_ ~ 0.5ms, _RANSAC_ ~ 1.8ms
+*   **Clustering** : _DBSCAN_ ~ 8ms
+*   **Classification** : _SVMpredict per object_ ~ 42ms
 
 ## **Feature extraction and object recognition**
 
@@ -213,9 +320,6 @@ The previous filters mentioned had some parameters that had to be tuned in order
 ### Pick and Place Setup
 
 #### 1. For all three tabletop setups (`test*.world`), perform object recognition, then read in respective pick list (`pick_list_*.yaml`). Next construct the messages that would comprise a valid `PickPlace` request output them to `.yaml` format.
-
-And here's another image! 
-![demo-2](https://user-images.githubusercontent.com/20687560/28748286-9f65680e-7468-11e7-83dc-f1a32380b89c.png)
 
 Spend some time at the end to discuss your code, what techniques you used, what worked and why, where the implementation might fail and how you might improve it if you were going to pursue this project further.  
 

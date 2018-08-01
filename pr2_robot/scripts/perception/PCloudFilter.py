@@ -47,15 +47,15 @@ class PCloudFilter ( object ) :
         _fcloud = self._voxelGridDownsample( _fcloud )
         _t3 = time.time()
         _fcloud = self._passThroughFiltering( _fcloud )
-        if optpub is not None :
-            optpub.publish( pcl_to_ros( _fcloud ) )
+        # if optpub is not None :
+        #     optpub.publish( pcl_to_ros( _fcloud ) )
         _t4 = time.time()
         _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
         _t5 = time.time()
 
-        print 'downsampling: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
-        print 'passthroughf: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
-        print 'ransacsegmen: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
+        print 'denoisingf: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        print 'downsampling: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
+        print 'passthroughf: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
         print 'ransacsegmen: ', ( ( _t5 - _t4 ) * 1000 ), ' ms'
 
         print 'END TIMING - FILTERING ********************'
