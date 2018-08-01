@@ -45,7 +45,7 @@ class PPipeline( object ) :
         self.m_classifier = PClassifierSVM()
         self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
-        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 2 )
+        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 3 )
 
     def _createPublishers( self ) :
         # publishers to send the filtered table and objects to RViz
@@ -149,7 +149,7 @@ class PPipeline( object ) :
         # Could add some logic to determine whether or not your object detections are robust
         # before calling pr2_mover()
         try:
-            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = False )
+            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = True )
         except rospy.ROSInterruptException:
             pass
 
