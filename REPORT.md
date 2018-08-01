@@ -433,9 +433,3 @@ And the `output*.yaml` files we got can be found in the following links :
 *   [**output1.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output1.yaml)
 *   [**output2.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output2.yaml)
 *   [**output3.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output3.yaml)
-#### 1. For all three tabletop setups (`test*.world`), perform object recognition, then read in respective pick list (`pick_list_*.yaml`). Next construct the messages that would comprise a valid `PickPlace` request output them to `.yaml` format.
-
-Spend some time at the end to discuss your code, what techniques you used, what worked and why, where the implementation might fail and how you might improve it if you were going to pursue this project further.  
-
-
-
