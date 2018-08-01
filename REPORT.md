@@ -3,7 +3,9 @@
 
 [//]: # (Image References)
 
-[img_intro_0]: imgs/gif_world2_motion.gif
+[gif_intro]: imgs/gif_world2_motion.gif
+[gif_filters_tuning]: imgs/gif_filters_tuning.gif
+
 [img_intro_1]: imgs/img_pointcloud_data.png
 [img_intro_2]: imgs/img_pointcloud_data_labels.png
 [img_pipeline]: imgs/img_perception_pipeline.png
@@ -20,7 +22,7 @@
 
 This project consists in the implementation of the perception pipeline for a more advance **pick & place** task, which consists of a **PR2** robot picking objects from a table and placing them into the correct containers.
 
-![PICK AND PLACE][img_intro_0]
+![PICK AND PLACE][gif_intro]
 
 We make use of the RGB-D camera in the **PR2** robot, which give us **Point Cloud** information ( very noisy in this case ) of the scene.
 
@@ -55,15 +57,65 @@ The steps implemented are the following :
 *   Region cutting using **Passthrough Filtering**
 *   Plane fitting using **RANSAC**
 
-This filters are already implemented in the **pcl** library, and we used them using the **python-pcl** bindings.
+This filters are already implemented in the **pcl** library, and we used them using the **python-pcl** bindings. The implementation of the filtering pipeline can be found in the file [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py).
 
 ### 1. _**Noise removal**_
 
-The initial cloud has quite some noise that might get in the way. So, the first step implemented was to apply the Statistical Outlier Removal filter from **pcl** to remove the noise points in our original cloud.
+The initial cloud has quite some noise that might get in the way. So, the first step was to apply the Statistical Outlier Removal filter from **pcl** to remove the noise points in our original cloud.
 
 ![SOR filtering][img_sor_filtering]
 
+The way the filter works is by checking a number of neighboring points around each point of the pointcloud, and checking which of these points is at a given multiple of the standard deviation of the group analized. The ones that are closer than that measure are kept and the others are removed ( outliers ). More information can be found [**here**](http://pointclouds.org/documentation/tutorials/statistical_outlier.php).
+
+The parameters we have to set for this filter are the **number of neighbors** to analyze of each point, and the **factor** of the standard deviation to use for the threshold.
+
+The call to the pcl function is located in the **_denoise** method in the [**PCloudFilter.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file, and uses some tuned parameters for the filter options.
+
+~~~python
+    # Statistical Outlier Removal (SOR) params
+    SOR_MEAN_K = 5
+    SOR_THRESHOLD_SCALE = 0.001
+
+    # ...
+
+    """
+    Applies statistical outlier removal
+    :param cloud : the cloud to remove outliers from
+    """
+    def _denoise( self, cloud ) :
+        _filter = cloud.make_statistical_outlier_filter()
+        _filter.set_mean_k( PCloudFilterParams.SOR_MEAN_K )
+        _filter.set_std_dev_mul_thresh( PCloudFilterParams.SOR_THRESHOLD_SCALE )
+
+        return _filter.filter()
+~~~
+
 ### 2. _**Downsampling**_
+
+One way to save computation is working in a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud to make further computations.
+
+The filter that we used in this step of the pipeline is the **Voxel-grid Downsampling** filter from **pcl**, which allowed us to downsample the cloud by replacing the points inside a voxel by a single point. Basically, we are placing a grid of voxels of certain size around the pointcloud and replacing the points inside a voxel by a single representative point.
+
+
+```python
+    # Voxel grid downsample params
+    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+
+    # ...
+
+    """
+    Applies voxel grid downsampling to reduce the size of the cloud
+
+    :param cloud : the cloud to apply downsampling to
+    """
+    def _voxelGridDownsample( self, cloud ) :
+        _filter = cloud.make_voxel_grid_filter()
+        _filter.set_leaf_size( PCloudFilterParams.VOXEL_LEAF_SIZE[0],
+                               PCloudFilterParams.VOXEL_LEAF_SIZE[1],
+                               PCloudFilterParams.VOXEL_LEAF_SIZE[2] )
+
+        return _filter.filter()
+```
 
 ![Downsample filtering][img_downsampling]
 
@@ -71,16 +123,78 @@ The initial cloud has quite some noise that might get in the way. So, the first 
 
 ![Passthrough filtering][img_cutting]
 
+```python
+    # Passthrough filter params - z
+    PASSTHROUGH_AXIS_Z = 'z'
+    PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
+    # Passthrough filter params - x
+    PASSTHROUGH_AXIS_Y = 'y'
+    PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
+
+    # ...
+
+    """
+    Applies 'cutting' ( passthrough filtering ) to the given cloud
+
+    :param cloud : the cloud to apply cutting to
+    """
+    def _passThroughFiltering( self, cloud ) :
+        _filter_z = cloud.make_passthrough_filter()
+        _filter_z.set_filter_field_name( PCloudFilterParams.PASSTHROUGH_AXIS_Z )
+        _filter_z.set_filter_limits( PCloudFilterParams.PASSTHROUGH_LIMITS_Z[0],
+                                     PCloudFilterParams.PASSTHROUGH_LIMITS_Z[1] )
+
+        _fcloud = _filter_z.filter()
+
+        _filter_x = _fcloud.make_passthrough_filter()
+        _filter_x.set_filter_field_name( PCloudFilterParams.PASSTHROUGH_AXIS_Y )
+        _filter_x.set_filter_limits( PCloudFilterParams.PASSTHROUGH_LIMITS_Y[0],
+                                     PCloudFilterParams.PASSTHROUGH_LIMITS_Y[1] )
+        
+        return _filter_x.filter()
+```
+
 ### 4. _**RANSAC**_
 
 ![RANSAC fitting][img_ransac]
 
-#### 2. Complete Exercise 2 steps: Pipeline including clustering for segmentation implemented.  
+```python
+    # RANSAC segmentation params
+    RANSAC_THRESHOLD = 0.00545
 
-#### 2. Complete Exercise 3 Steps.  Features extracted and SVM trained.  Object recognition implemented.
-Here is an example of how to include an image in your writeup.
+    # ...
 
-![demo-1](https://user-images.githubusercontent.com/20687560/28748231-46b5b912-7467-11e7-8778-3095172b7b19.png)
+    """
+    Applies RANSAC plane fitting to the given cloud
+
+    :param cloud : the cloud to apply RANSAC to
+    """
+    def _ransacSegmentation( self, cloud ) :
+        _segmenter = cloud.make_segmenter()
+        _segmenter.set_model_type( pcl.SACMODEL_PLANE )
+        _segmenter.set_method_type( pcl.SAC_RANSAC )
+        _segmenter.set_distance_threshold( PCloudFilterParams.RANSAC_THRESHOLD )
+        _tableIndices, _ = _segmenter.segment()
+
+        # extract table and objects from inliers and outliers
+        _tableCloud = cloud.extract( _tableIndices, negative = False )
+        _objectsCloud = cloud.extract( _tableIndices, negative = True )
+
+        return _tableCloud, _objectsCloud
+```
+
+### 5. _**Parameter Tuning**_
+
+The previous filters mentioned had some parameters that had to be tuned in order to work correctly in the new setup. This is why we implemented a GUI tool to allow picking these parameters interactively.
+
+![FILTERS TUNING TOOL][gif_filters_tuning]
+
+## **Segmentation using Euclidean Clustering**
+
+
+
+## **Feature extraction and object recognition**
+
 
 ### Pick and Place Setup
 
