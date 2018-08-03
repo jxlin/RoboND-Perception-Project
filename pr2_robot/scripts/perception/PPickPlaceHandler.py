@@ -7,6 +7,7 @@
 import numpy as np
 import rospy
 import pcl
+import time
 
 # some necessary messages for the request
 from geometry_msgs.msg import Pose
@@ -14,8 +15,15 @@ from std_msgs.msg import Float64
 from std_msgs.msg import Int32
 from std_msgs.msg import String
 from pr2_robot.srv import *
+from std_srvs.srv import *
 # some utils we will need
 from PUtils import *
+
+def comparatorDistance( obj ) :
+    _dx = obj.centroid.position.x
+    _dy = obj.centroid.position.y
+    _dz = obj.centroid.position.z
+    return np.sqrt( _dx ** 2 + _dy ** 2 + _dz ** 2 )
 
 class PPickObject( object ) :
 
@@ -34,6 +42,16 @@ class PPickPlaceHandler( object ) :
         super( PPickPlaceHandler, self ).__init__()
         # define scene number
         self.m_sceneNum = sceneNum
+        # publisher for robot base motion
+        self.m_pubBaseMotion = rospy.Publisher( '/pr2/world_joint_controller/command',
+                                                Float64,
+                                                queue_size = 10 )
+        # publisher for collision pointcloud
+        self.m_pubCollision = rospy.Publisher( '/pr2/3d_map/points',
+                                               PointCloud2,
+                                               queue_size = 1 )
+        # list of picked objects
+        self.m_pickedList = []
         # initialize handler
         self._initialize()
 
@@ -41,7 +59,7 @@ class PPickPlaceHandler( object ) :
         # load parameters from parameter server
         _rosPickList = rospy.get_param( '/object_list' )
         # initialize pick list
-        self.m_picklist = []
+        self.m_pickDict = {}
         for i in range( len( _rosPickList ) ) :
             _pobject = PPickObject()
             _pobject.label = _rosPickList[i]['name']
@@ -50,7 +68,7 @@ class PPickPlaceHandler( object ) :
             _pobject.cloud = None
             _pobject.centroid = None
 
-            self.m_picklist.append( _pobject )
+            self.m_pickDict[ _pobject.label ] = _pobject
 
         # initialize drop list
         _rosDropList = rospy.get_param( '/dropbox' )
@@ -60,26 +78,75 @@ class PPickPlaceHandler( object ) :
             self.m_dropdict[ _rosDropList[i]['group'] ] = {}
             self.m_dropdict[ _rosDropList[i]['group'] ]['position'] = _rosDropList[i]['position']
             self.m_dropdict[ _rosDropList[i]['group'] ]['name'] = _rosDropList[i]['name']
-        
 
+    """
+    Picks a single object from the requested pick list.
+    """
+    def pickSingleObject( self, detectedObjects, sceneCloud ) :
+        # compute centroid of the detected objects
+        for i in range( len( detectedObjects ) ) :
+            _centroid = self._computeCentroid( detectedObjects[i].cloud )
+            detectedObjects[i].centroid.position.x = _centroid[0]
+            detectedObjects[i].centroid.position.y = _centroid[1]
+            detectedObjects[i].centroid.position.z = _centroid[2]
+        # order the objects from distance to the camera
+        detectedObjects.sort( key = comparatorDistance, reverse = False )
+        # find the closest one that has not been picked yet
+        for i in range( len( detectedObjects ) ) :
+            if detectedObjects[i].label not in self.m_pickedList :
+                # try to pick this object
+                self._makeSinglePick( detectedObjects[i], sceneCloud )
+                break
+
+    def _makeSinglePick( self, pickobj, sceneCloud ) :
+        # make the appropiate cloud for the collision map
+        _collisionCloud = self._removeFromCloud( XYZRGB_to_XYZ( sceneCloud ), 
+                                                 XYZRGB_to_XYZ( ros_to_pcl( pickobj.cloud ) ) )
+        print 'Cleaning octomap'
+        self._clearOctomap()
+        print 'Publishing collision cloud'
+        self.m_pubCollision.publish( pcl_to_ros( XYZ_to_XYZRGB( _collisionCloud, [255, 0, 0] ) ) )
+        # self.m_pubCollision.publish( pcl_to_ros( sceneCloud ) )
+        # self.m_pubCollision.publish( pickobj.cloud )
+        # self.m_pubCollision.publish( pcl_to_ros( pcl.PointCloud() ) )
+        # # sleep a little?
+        # print 'waiting a bit'
+        # time.sleep( 0.5 )
+        # # set the object properties in the picklist history
+        # self.m_pickDict[ pickobj.label ].cloud = pickobj.cloud
+        # self.m_pickDict[ pickobj.label ].picked = True
+        # self.m_pickDict[ pickobj.label ].centroid[0] = pickobj.centroid.position.x
+        # self.m_pickDict[ pickobj.label ].centroid[1] = pickobj.centroid.position.y
+        # self.m_pickDict[ pickobj.label ].centroid[2] = pickobj.centroid.position.z
+        # # send the request
+        # self._pickObject( self.m_pickDict[ pickobj.label ], True )
+        # # add it to the picked list
+        # self.m_pickedList.append( detectedObjects[i].label )
+        
+    """
+    Makes the pr2 pick all the objects ...
+    in the detected list ( if not picked yet )
+    This is kind of an old method. Should use 
+    pickSingleObject instead to account for challenge requirements
+    """
     def pickObjectsFromList( self, objectList, callservice = False, savetofile = True ) :
         _dicts = []
         # check which object should be picked
-        for i in range( len( self.m_picklist ) ) :
+        for _keylabel in self.m_pickDict :
             # check if the requested object is not already picked
-            if self.m_picklist[i].picked :
+            if self.m_pickDict[_keylabel].picked :
                 continue
 
             for j in range( len( objectList ) ) :
                 # check if the requested object is in the list
-                if objectList[j].label != self.m_picklist[i].label :
+                if objectList[j].label != _keylabel :
                     continue
                 # set the data to this object
-                self.m_picklist[i].cloud = objectList[j].cloud
-                self.m_picklist[i].picked = True
-                self.m_picklist[i].centroid = self._computeCentroid( objectList[j].cloud )
+                self.m_pickDict[_keylabel].cloud = objectList[j].cloud
+                self.m_pickDict[_keylabel].picked = True
+                self.m_pickDict[_keylabel].centroid = self._computeCentroid( objectList[j].cloud )
                 # pick the object using the service
-                _yamlDict = self._pickObject( self.m_picklist[i], callservice = callservice )
+                _yamlDict = self._pickObject( self.m_pickDict[_keylabel], callservice = callservice )
                 _dicts.append( _yamlDict )
 
         if savetofile and ( len( _dicts ) > 0 ) :
@@ -117,7 +184,10 @@ class PPickPlaceHandler( object ) :
                                     _req.object_name,
                                     _req.pick_pose,
                                     _req.place_pose )
-        ## Send pick and place request ##########################################################
+        ## start pick and place request ##########################################################
+
+        # rotate to account for the collision map
+
 
         if callservice :
             # Wait for 'pick_place_routine' service to come up
@@ -139,3 +209,77 @@ class PPickPlaceHandler( object ) :
         #########################################################################################
 
         return _yamlDict
+
+    """
+    Clears the octomap of the moveit! planning framework
+    """
+    def _clearOctomap( self ) :
+        rospy.wait_for_service( 'clear_octomap' )
+        try :
+            _clear_octomap_routine = rospy.ServiceProxy( 'clear_octomap', Empty )
+            _clear_octomap_routine()
+            
+        except rospy.ServiceException, e :
+            print 'Failed clearing the octomap: %s' %e
+
+    """
+    Removes a given subset cloud from a parent cloud.
+    For now, just using cropping based on the boundingbox
+    of the subset cloud
+
+    :param parentCloud : cloud to extract the child from - xyz cloud
+    :param childCloud : cloud to extract from the parent - xyz cloud
+    """
+    def _removeFromCloud( self, parentCloud, childCloud ) :
+        # compute AABB boundaries of child cloud
+        _min, _max = self._computeBoundingBox( childCloud )
+        # make the cropping filter
+        _cropBoxFilter = parentCloud.make_cropbox()
+        _cropBoxFilter.set_Negative( True )
+        _cropBoxFilter.set_Min( _min[0], _min[1], _min[2], 1.0 )
+        _cropBoxFilter.set_Max( _max[0], _max[1], _max[2], 1.0 )
+
+        return _cropBoxFilter.filter()
+
+    """
+    Computes the AABB boundaries of a pointcloud
+
+    :param cloud: pcl cloud with only xyz data
+    """
+    def _computeBoundingBox( self, cloud ) :
+        # transform to points array
+        _points = cloud.to_array()
+        # compute min-max
+        _min = np.min( _points, axis = 0 )
+        _max = np.max( _points, axis = 0 )
+
+        return _min, _max
+
+    """
+    Make the pr2 base joint go to the given reference
+
+    :param angle : requested reference angle for the base joint
+    """
+    def requestBaseMotion( self, angle ) :
+        print 'requesting base motion by angle: ', angle
+        self.m_pubBaseMotion.publish( ( angle * np.pi / 180.0 ) )
+
+    """
+    Make the pr2 do a scan of the surroundings
+    """
+    def requestInitialScan( self ) :
+        # to make things simpler, don't check if got ...
+        # there, but just delay a bit ( tune delay )
+
+        # go to the side
+        print 'requesting rotate left'
+        self.requestBaseMotion( -110.0 )
+        time.sleep( 25 )
+        # go to the other side
+        print 'requesting rotate right'
+        self.requestBaseMotion( 110.0 )
+        time.sleep( 50 )
+        # go to neutral position
+        print 'requesting back to position'
+        self.requestBaseMotion( 0.0 )
+        time.sleep( 25 )

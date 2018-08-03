@@ -27,10 +27,16 @@ from perception.PUtils import *
 
 g_pipeline = None
 
+STATE_IDLE = 0
+STATE_SCANNING = 1
+STATE_PICKING = 2
+
 class PPipeline( object ) :
 
     def __init__( self ) :
         super( PPipeline, self ).__init__()
+        # state the pipeline is in
+        self.m_state = STATE_IDLE
         # initialize resources
         self._createPipeline()
         self._createPublishers()
@@ -84,6 +90,8 @@ class PPipeline( object ) :
         return _getNormalsProxy( cloud ).cluster
 
     def onCloudMessageReceived( self, cloudMsg ) :
+        # Implement state machine here
+
         # transform roscloud to pcl format
         _cloudPcl = ros_to_pcl( cloudMsg )
 
@@ -91,7 +99,7 @@ class PPipeline( object ) :
 
         # apply segmentation
         # _tableCloud, _objectsCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
-        _tableCloud, _objectsCloud = self.m_cloudFilterer.apply( _cloudPcl )
+        _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl )
         # apply clusterer
         _clustersClouds, _clustersCloudViz = self.m_cloudClusterer.cluster( _objectsCloud )
         # transforms results for publishers
@@ -149,7 +157,10 @@ class PPipeline( object ) :
         # Could add some logic to determine whether or not your object detections are robust
         # before calling pr2_mover()
         try:
-            self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = True )
+            # self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = True )
+            # self.m_pickplaceHandler.pickSingleObject( _detectedObjects, _sceneCloud )
+            # self.m_pickplaceHandler.requestBaseMotion( -110.0 )
+            self.m_pickplaceHandler.requestInitialScan()
         except rospy.ROSInterruptException:
             pass
 

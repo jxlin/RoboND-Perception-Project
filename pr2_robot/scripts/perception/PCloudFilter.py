@@ -34,7 +34,7 @@ class PCloudFilter ( object ) :
 
     """
     Applies cloud filtering steps to the given cloud and ...
-    returns the table and objects clouds
+    returns the table, objects clouds and the combination of the two
 
     :param cloud : pcl cloud data structure
     :param optpub : optional publisher to send cloud to
@@ -60,7 +60,7 @@ class PCloudFilter ( object ) :
 
         print 'END TIMING - FILTERING ********************'
 
-        return _tableCloud, _objectsCloud
+        return _tableCloud, _objectsCloud, _fcloud
 
     """
     Applies voxel grid downsampling to reduce the size of the cloud
