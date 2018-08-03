@@ -14,6 +14,7 @@ from geometry_msgs.msg import Pose
 from std_msgs.msg import Float64
 from std_msgs.msg import Int32
 from std_msgs.msg import String
+from sensor_msgs.msg import JointState
 from pr2_robot.srv import *
 from std_srvs.srv import *
 # some utils we will need
@@ -42,6 +43,10 @@ class PPickPlaceHandler( object ) :
         super( PPickPlaceHandler, self ).__init__()
         # define scene number
         self.m_sceneNum = sceneNum
+        # object to pick ( type: DetectedObject )
+        self.m_detectedObject = None
+        # current world-joint angle
+        self.m_worldJointAngle = 0.0
         # publisher for robot base motion
         self.m_pubBaseMotion = rospy.Publisher( '/pr2/world_joint_controller/command',
                                                 Float64,
@@ -50,6 +55,11 @@ class PPickPlaceHandler( object ) :
         self.m_pubCollision = rospy.Publisher( '/pr2/3d_map/points',
                                                PointCloud2,
                                                queue_size = 1 )
+        # subscriber for the robot joint states
+        self.m_subsJoints = rospy.Subscriber( '/joint_states',
+                                              JointState,
+                                              self.onMessageJointsReceived,
+                                              queue_size = 1 )
         # list of picked objects
         self.m_pickedList = []
         # initialize handler
@@ -80,9 +90,50 @@ class PPickPlaceHandler( object ) :
             self.m_dropdict[ _rosDropList[i]['group'] ]['name'] = _rosDropList[i]['name']
 
     """
-    Picks a single object from the requested pick list.
+    Checks whether or not there is a pickable ...
+    object in a given list of detected objects
+
+    :param detectecObjects : list of detected objects to check
     """
-    def pickSingleObject( self, detectedObjects, sceneCloud ) :
+    def checkSinglePick( self, detectedObjects ) :
+        _found = False
+        for dobj in detectedObjects :
+            # check if in picklist and not picked yet
+            if ( dobj.label in self.m_pickDict ) and \
+               ( dobj.label not in self.m_pickedList ):
+               _found = True
+               break
+
+        return _found
+
+    def startScanningPickingProcess( self, detectedObjects, sceneCloud ) :
+        # select a single object to pick
+        _dobj = self.pickSingleObject( detectedObjects, sceneCloud, False )
+        # store this object for later pick-request
+        self.m_detectedObject = _dobj
+        # make the collision cloud for the tabletop scene, without the detected object
+        _collisionCloud = self._removeFromCloud( XYZRGB_to_XYZ( sceneCloud ), 
+                                                 XYZRGB_to_XYZ( ros_to_pcl( _dobj.cloud ) ) )
+        # clear the octomap
+        self._clearOctomap()
+        # publish the cloud so far
+        self.m_pubCollision.publish( pcl_to_ros( XYZ_to_XYZRGB( _collisionCloud, [255, 0, 0] ) ) )
+    
+    """
+    Continue the picking process using the previous detected object
+    """
+    def pickCurrentObject( self ) :
+        if self.m_detectedObject :
+            _yamldict, _response = self._makeSinglePick( self.m_detectedObject, None )
+
+    """
+    Picks a single object from the requested pick list.
+
+    :param detectedObjects : list of detected objects to pick from
+    :param sceneCloud : cloud that represents the tabletop scene, filtered and downsampled
+    :param pick : boolean to check whether or not to make the pick request. If false, return the object to pick
+    """
+    def pickSingleObject( self, detectedObjects, sceneCloud, pick = True ) :
         # compute centroid of the detected objects
         for i in range( len( detectedObjects ) ) :
             _centroid = self._computeCentroid( detectedObjects[i].cloud )
@@ -95,33 +146,37 @@ class PPickPlaceHandler( object ) :
         for i in range( len( detectedObjects ) ) :
             if detectedObjects[i].label not in self.m_pickedList :
                 # try to pick this object
-                self._makeSinglePick( detectedObjects[i], sceneCloud )
-                break
+                if pick :
+                    self._makeSinglePick( detectedObjects[i], sceneCloud )
+                    return None
+                else :
+                    return detectedObjects[i]
 
-    def _makeSinglePick( self, pickobj, sceneCloud ) :
-        # make the appropiate cloud for the collision map
-        _collisionCloud = self._removeFromCloud( XYZRGB_to_XYZ( sceneCloud ), 
-                                                 XYZRGB_to_XYZ( ros_to_pcl( pickobj.cloud ) ) )
-        print 'Cleaning octomap'
-        self._clearOctomap()
-        print 'Publishing collision cloud'
-        self.m_pubCollision.publish( pcl_to_ros( XYZ_to_XYZRGB( _collisionCloud, [255, 0, 0] ) ) )
-        # self.m_pubCollision.publish( pcl_to_ros( sceneCloud ) )
-        # self.m_pubCollision.publish( pickobj.cloud )
-        # self.m_pubCollision.publish( pcl_to_ros( pcl.PointCloud() ) )
-        # # sleep a little?
-        # print 'waiting a bit'
-        # time.sleep( 0.5 )
-        # # set the object properties in the picklist history
-        # self.m_pickDict[ pickobj.label ].cloud = pickobj.cloud
-        # self.m_pickDict[ pickobj.label ].picked = True
-        # self.m_pickDict[ pickobj.label ].centroid[0] = pickobj.centroid.position.x
-        # self.m_pickDict[ pickobj.label ].centroid[1] = pickobj.centroid.position.y
-        # self.m_pickDict[ pickobj.label ].centroid[2] = pickobj.centroid.position.z
-        # # send the request
-        # self._pickObject( self.m_pickDict[ pickobj.label ], True )
-        # # add it to the picked list
-        # self.m_pickedList.append( detectedObjects[i].label )
+    def _makeSinglePick( self, pickobj, sceneCloud = None ) :
+        if sceneCloud :
+            # make the appropiate cloud for the collision map
+            _collisionCloud = self._removeFromCloud( XYZRGB_to_XYZ( sceneCloud ), 
+                                                     XYZRGB_to_XYZ( ros_to_pcl( pickobj.cloud ) ) )
+            print 'Cleaning octomap'
+            self._clearOctomap()
+            print 'Publishing collision cloud'
+            self.m_pubCollision.publish( pcl_to_ros( XYZ_to_XYZRGB( _collisionCloud, [255, 0, 0] ) ) )
+            # # sleep a little?
+            print 'waiting a bit'
+            time.sleep( 0.5 )
+        
+        # set the object properties in the picklist history
+        self.m_pickDict[ pickobj.label ].cloud = pickobj.cloud
+        self.m_pickDict[ pickobj.label ].picked = True
+        self.m_pickDict[ pickobj.label ].centroid = [ pickobj.centroid.position.x,
+                                                      pickobj.centroid.position.y,
+                                                      pickobj.centroid.position.z ]
+        # send the request
+        _yamldict, _resp = self._pickObject( self.m_pickDict[ pickobj.label ], True )
+        # add it to the picked list
+        self.m_pickedList.append( pickobj.label )
+
+        return _yamldict, _resp
         
     """
     Makes the pr2 pick all the objects ...
@@ -146,7 +201,7 @@ class PPickPlaceHandler( object ) :
                 self.m_pickDict[_keylabel].picked = True
                 self.m_pickDict[_keylabel].centroid = self._computeCentroid( objectList[j].cloud )
                 # pick the object using the service
-                _yamlDict = self._pickObject( self.m_pickDict[_keylabel], callservice = callservice )
+                _yamlDict, _ = self._pickObject( self.m_pickDict[_keylabel], callservice = callservice )
                 _dicts.append( _yamlDict )
 
         if savetofile and ( len( _dicts ) > 0 ) :
@@ -202,13 +257,14 @@ class PPickPlaceHandler( object ) :
                                         _req.place_pose )
 
                 print ( "Response: ", resp.success )
+                return _yamlDict, resp.success
 
             except rospy.ServiceException, e:
                 print "Service call failed: %s"%e
 
         #########################################################################################
 
-        return _yamlDict
+        return _yamlDict, None
 
     """
     Clears the octomap of the moveit! planning framework
@@ -283,3 +339,50 @@ class PPickPlaceHandler( object ) :
         print 'requesting back to position'
         self.requestBaseMotion( 0.0 )
         time.sleep( 25 )
+
+    def onMessageJointsReceived( self, jointsMsg ) :
+        # get last joint value
+        self.m_worldJointAngle = jointsMsg.position[-1]
+        # print 'current worldjoint angle: ', self.m_worldJointAngle
+
+    def _hasReachedReference( self, current, reference ) :
+        if abs( current - reference ) < 0.01 :
+            return True
+        return False
+
+    def makeRightScan( self, worldCloud ) :
+        self.requestBaseMotion( 110.0 )
+        if self._hasReachedReference( self.m_worldJointAngle, np.radians( 110.0 ) ) :
+            # add the current cloud to the collision map
+            self.addSideCollisionCloud( worldCloud )
+            return True
+        return False
+
+    def makeLeftScan( self, worldCloud ) :
+        self.requestBaseMotion( -110.0 )
+        if self._hasReachedReference( self.m_worldJointAngle, np.radians( -110.0 ) ) :
+            # add the current cloud to the collision map
+            self.addSideCollisionCloud( worldCloud )
+            return True
+        return False
+
+    def makeReturnScan( self ) :
+        self.requestBaseMotion( 0.0 )
+        if self._hasReachedReference( self.m_worldJointAngle, 0.0 ) :
+            return True
+        return False
+
+    """
+    Denoises and publishes the cloud for the octomap creation
+
+    :param cloud : pcl cloud to send
+    """
+    def addSideCollisionCloud( self, cloud ) :
+        # create the SOR filter
+        _filter = cloud.make_statistical_outlier_filter()
+        _filter.set_mean_k( 5 )
+        _filter.set_std_dev_mul_thresh( 0.001 )
+        # denoise the cloud
+        _fcloud = _filter.filter()
+        # semd it for collision map
+        self.m_pubCollision.publish( pcl_to_ros( _fcloud ) )

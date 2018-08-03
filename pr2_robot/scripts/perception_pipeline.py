@@ -28,8 +28,10 @@ from perception.PUtils import *
 g_pipeline = None
 
 STATE_IDLE = 0
-STATE_SCANNING = 1
-STATE_PICKING = 2
+STATE_SCANNING_LEFT = 1
+STATE_SCANNING_RIGHT = 2
+STATE_SCANNING_RETURNING = 3
+STATE_PICKING = 4
 
 class PPipeline( object ) :
 
@@ -51,7 +53,7 @@ class PPipeline( object ) :
         self.m_classifier = PClassifierSVM()
         self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
-        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 3 )
+        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 1 )
 
     def _createPublishers( self ) :
         # publishers to send the filtered table and objects to RViz
@@ -89,9 +91,7 @@ class PPipeline( object ) :
         _getNormalsProxy = rospy.ServiceProxy( '/feature_extractor/get_normals', GetNormals )
         return _getNormalsProxy( cloud ).cluster
 
-    def onCloudMessageReceived( self, cloudMsg ) :
-        # Implement state machine here
-
+    def _findObjects( self, cloudMsg ) :
         # transform roscloud to pcl format
         _cloudPcl = ros_to_pcl( cloudMsg )
 
@@ -114,7 +114,7 @@ class PPipeline( object ) :
         # ###############################################################
 
         # CLASSIFICATION ################################################
-        print 'START TIMING - CLASSIFICATION ******************'
+        # print 'START TIMING - CLASSIFICATION ******************'
         _detectedObjectsLabels = []
         _detectedObjects = []
         _t1 = time.time()
@@ -146,23 +146,64 @@ class PPipeline( object ) :
             _do.cloud = _rosObjCloud
             _detectedObjects.append( _do )
         _t2 = time.time()
-        print 'classification: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
-        print 'END TIMING - CLASSIFICATION ******************'
+        # print 'classification: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        # print 'END TIMING - CLASSIFICATION ******************'
         rospy.loginfo( 'Detected {} objects: {}'.format( len( _detectedObjectsLabels ), _detectedObjectsLabels ) )
         # Publish the list of detected objects
         self.m_pubDetectedObjects.publish( _detectedObjects )
         # ###############################################################
 
-        # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
-        # Could add some logic to determine whether or not your object detections are robust
-        # before calling pr2_mover()
-        try:
-            # self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = True )
-            # self.m_pickplaceHandler.pickSingleObject( _detectedObjects, _sceneCloud )
-            # self.m_pickplaceHandler.requestBaseMotion( -110.0 )
-            self.m_pickplaceHandler.requestInitialScan()
-        except rospy.ROSInterruptException:
-            pass
+        return _detectedObjects, _sceneCloud
+
+    def onCloudMessageReceived( self, cloudMsg ) :
+        # Implement state machine here
+        if self.m_state == STATE_IDLE :
+            # check if there are objects in the scene
+            _detectedObjects, _sceneCloud = self._findObjects( cloudMsg )
+            # check if there is at least one object to pick
+            if ( len( _detectedObjects ) > 0 ) and \
+               ( self.m_pickplaceHandler.checkSinglePick( _detectedObjects ) ) :
+                # start the scanning-picking process
+                print 'CHANGE TO STATE: STATE_SCANNING_LEFT'
+                self.m_state = STATE_SCANNING_LEFT
+                self.m_pickplaceHandler.startScanningPickingProcess( _detectedObjects, _sceneCloud )
+
+        elif self.m_state == STATE_SCANNING_LEFT :
+            _finished = self.m_pickplaceHandler.makeLeftScan( ros_to_pcl( cloudMsg ) )
+            if _finished :
+                print 'CHANGE TO STATE: STATE_SCANNING_RIGHT'
+                self.m_state = STATE_SCANNING_RIGHT
+        
+        elif self.m_state == STATE_SCANNING_RIGHT :
+            _finished = self.m_pickplaceHandler.makeRightScan( ros_to_pcl( cloudMsg ) )
+            if _finished :
+                print 'CHANGE TO STATE: STATE_SCANNING_RETURNING'
+                self.m_state = STATE_SCANNING_RETURNING
+
+        elif self.m_state == STATE_SCANNING_RETURNING :
+            _finished = self.m_pickplaceHandler.makeReturnScan()
+            if _finished :
+                print 'CHANGE TO STATE: STATE_PICKING'
+                self.m_state = STATE_PICKING
+
+        elif self.m_state == STATE_PICKING :
+            try :
+                self.m_pickplaceHandler.pickCurrentObject()
+            except rospy.ROSInterruptException :
+                print 'SOMETHING WENT WRONG WHEN REQUESTING PICK'
+            print 'CHANGE TO STATE: STATE_IDLE'
+            self.m_state = STATE_IDLE
+
+        # # Suggested location for where to invoke your pr2_mover() function within pcl_callback()
+        # # Could add some logic to determine whether or not your object detections are robust
+        # # before calling pr2_mover()
+        # try:
+        #     # self.m_pickplaceHandler.pickObjectsFromList( _detectedObjects, callservice = False, savetofile = True )
+        #     # self.m_pickplaceHandler.pickSingleObject( _detectedObjects, _sceneCloud )
+        #     # self.m_pickplaceHandler.requestBaseMotion( -110.0 )
+        #     self.m_pickplaceHandler.requestInitialScan()
+        # except rospy.ROSInterruptException:
+        #     pass
 
 if __name__ == '__main__':
     # ROS node initialization

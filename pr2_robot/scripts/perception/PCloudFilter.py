@@ -40,7 +40,7 @@ class PCloudFilter ( object ) :
     :param optpub : optional publisher to send cloud to
     """
     def apply( self, cloud, optpub = None ) :
-        print 'START TIMING - FILTERING ******************'
+        # print 'START TIMING - FILTERING ******************'
         _t1 = time.time()
         _fcloud = self._denoise( cloud )
         _t2 = time.time()
@@ -53,12 +53,12 @@ class PCloudFilter ( object ) :
         _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
         _t5 = time.time()
 
-        print 'denoisingf: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
-        print 'downsampling: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
-        print 'passthroughf: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
-        print 'ransacsegmen: ', ( ( _t5 - _t4 ) * 1000 ), ' ms'
+        # print 'denoisingf: ', ( ( _t2 - _t1 ) * 1000 ), ' ms'
+        # print 'downsampling: ', ( ( _t3 - _t2 ) * 1000 ), ' ms'
+        # print 'passthroughf: ', ( ( _t4 - _t3 ) * 1000 ), ' ms'
+        # print 'ransacsegmen: ', ( ( _t5 - _t4 ) * 1000 ), ' ms'
 
-        print 'END TIMING - FILTERING ********************'
+        # print 'END TIMING - FILTERING ********************'
 
         return _tableCloud, _objectsCloud, _fcloud
 
