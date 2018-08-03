@@ -50,6 +50,7 @@ class PSession :
         self.kernel = 'linear'
         self.gamma = 1.0
         self.C = 1.0
+        self.degree = 1.0
         self.dataPercent = 0.5
         self.trainSize = 0
 
@@ -83,21 +84,54 @@ class PClassifierSVM( object ) :
         - data_percent
 
     : param datafile : .sav file that contains the training data
+    : param schedule : type of shedule to use ( for now just (NORMAL, KRBF, KPOLY) )
+    : param experimentName : string for the name of the experiment
+    : param waitForUser : boolean to whether or not wait for user input to continue
     """
-    def startTrainingSchedule( self, datafile ) :
+    def startTrainingSchedule( self, datafile, schedule, experimentName, waitForUser = True ) :
         plt.ion()
         # load the pickle data
         _dataSet = pickle.load( open( datafile, 'rb' ) )
         _dataSet = self._rearrangeDataset( _dataSet )
         self.m_sessionDataX, self.m_sessionDataY = self._splitFeaturesLabels( _dataSet )
 
+        # # make schedule for sessions
+        # _opts_nbinsColors = [ 32, 128, 255 ]
+        # _opts_nbinsNormals = [ 50, 150, 250 ]
+        # _opts_kernel = [ 'linear' ]
+        # _opts_C = [ 1.0 ]
+        # _opts_degree = [ 1 ]
+        # _opts_gamma = [ 1.0 ]
+        # _opts_dataPercent = [ 0.1, 0.2, 0.4, 0.8, 1.0 ]
+
+        # if schedule == 'KRBF' :
+        #     _opts_kernel = [ 'rbf' ]
+        #     _opts_gamma = [ 0.3, 0.5, 0.7, 0.9 ]
+        #     _opts_C = [ 0.1, 1.0, 10.0, 100.0 ]
+        # elif schedule == 'KPOLY' :
+        #     _opts_kernel = [ 'poly' ]
+        #     _opts_C = [ 0.1, 1.0, 10.0, 100.0 ]
+        #     _opts_degree = [ 2, 3, 4 ]
+
         # make schedule for sessions
         _opts_nbinsColors = [ 32, 128, 255 ]
         _opts_nbinsNormals = [ 50, 150, 250 ]
         _opts_kernel = [ 'linear' ]
-        _opts_C = [ 1.0 ]
+        _opts_C = [ 0.1, 1.0, 10.0 ]
+        _opts_degree = [ 1 ]
         _opts_gamma = [ 1.0 ]
-        _opts_dataPercent = [ 0.1, 0.2, 0.4, 0.8, 1.0 ]
+        _opts_dataPercent = [ 0.1, 0.5, 1.0 ]
+
+        if schedule == 'KRBF' :
+            _opts_kernel = [ 'rbf' ]
+            _opts_gamma = [ 0.3, 0.5, 0.7 ]
+            print 'USING KRBF SCHEDULE'
+        elif schedule == 'KPOLY' :
+            _opts_kernel = [ 'poly' ]
+            _opts_degree = [ 2, 3, 4 ]
+            print 'USING KPOLY SCHEDULE'
+        else :
+            print 'USING NORMAL SCHEDULE'
 
         _sessions = []
 
@@ -106,6 +140,7 @@ class PClassifierSVM( object ) :
                                                        _opts_kernel,
                                                        _opts_C,
                                                        _opts_gamma,
+                                                       _opts_degree,
                                                        _opts_dataPercent ] ) ) ) :
 
             _sess = PSession()
@@ -114,15 +149,17 @@ class PClassifierSVM( object ) :
             _sess.kernel = _opts[2]
             _sess.C = _opts[3]
             _sess.gamma = _opts[4]
-            _sess.dataPercent = _opts[5]
-            _sess.trainSize = int( _opts[5] * len( _dataSet ) )
+            _sess.degree = _opts[5]
+            _sess.dataPercent = _opts[6]
+            _sess.trainSize = int( _opts[6] * len( _dataSet ) )
 
             self._makeTrainSession( _sess )
             _sessions.append( _sess )
         
-        self._showTrainingScheduleResults( _sessions )
+        self._showTrainingScheduleResults( _sessions, experimentName )
 
-        raw_input( 'Press enter to continue...' )
+        if waitForUser :
+            raw_input( 'Press enter to continue...' )
 
     """
     Rearranges a dataset assumed in format [<dataC1>,<dataC2>,...,<dataC8>] such that
@@ -244,6 +281,9 @@ class PClassifierSVM( object ) :
     def _getSessionId( self, session ) :
         _sessId = 'sess_'
         _sessId += 'kernel_' + session.kernel + '_'
+        _sessId += 'C_' + str( session.C ) + '_'
+        _sessId += 'dg_' + str( session.degree ) + '_'
+        _sessId += 'gamma_' + str( session.gamma ) + '_'
         _sessId += 'nc_' + str( session.nbinsColors ) + '_'
         _sessId += 'nn_' + str( session.nbinsNormals ) + '_'
         _sessId += 'size_' + str( session.trainSize )
@@ -287,13 +327,13 @@ class PClassifierSVM( object ) :
         plt.xlabel( 'Predicted label' )
         plt.savefig( title + '.png' )
 
-    def _showTrainingScheduleResults( self, sessions ) :
+    def _showTrainingScheduleResults( self, sessions, experimentName ) :
         # show results from worst to best in ascending order
         sessions.sort( key = lambda x: x.accuracyScore, reverse = True )
         for i in range( len( sessions ) ) :
             print( self._getSessionId( sessions[i] ), sessions[i].accuracyScore )
         # save session results
-        _fhandle = open( 'results.txt', 'wb' )
+        _fhandle = open( experimentName + '.txt', 'wb' )
         for i in range( len( sessions ) ) :
             _fhandle.write( self._getSessionId( sessions[i] ) + ' - ' + str( sessions[i].accuracyScore ) + '\n' )
         _fhandle.close()
