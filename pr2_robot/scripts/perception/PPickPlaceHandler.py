@@ -329,11 +329,11 @@ class PPickPlaceHandler( object ) :
 
         # go to the side
         print 'requesting rotate left'
-        self.requestBaseMotion( -110.0 )
+        self.requestBaseMotion( -120.0 )
         time.sleep( 25 )
         # go to the other side
         print 'requesting rotate right'
-        self.requestBaseMotion( 110.0 )
+        self.requestBaseMotion( 120.0 )
         time.sleep( 50 )
         # go to neutral position
         print 'requesting back to position'
@@ -351,16 +351,16 @@ class PPickPlaceHandler( object ) :
         return False
 
     def makeRightScan( self, worldCloud ) :
-        self.requestBaseMotion( 110.0 )
-        if self._hasReachedReference( self.m_worldJointAngle, np.radians( 110.0 ) ) :
+        self.requestBaseMotion( 120.0 )
+        if self._hasReachedReference( self.m_worldJointAngle, np.radians( 120.0 ) ) :
             # add the current cloud to the collision map
             self.addSideCollisionCloud( worldCloud )
             return True
         return False
 
     def makeLeftScan( self, worldCloud ) :
-        self.requestBaseMotion( -110.0 )
-        if self._hasReachedReference( self.m_worldJointAngle, np.radians( -110.0 ) ) :
+        self.requestBaseMotion( -120.0 )
+        if self._hasReachedReference( self.m_worldJointAngle, np.radians( -120.0 ) ) :
             # add the current cloud to the collision map
             self.addSideCollisionCloud( worldCloud )
             return True

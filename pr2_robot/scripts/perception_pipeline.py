@@ -51,9 +51,10 @@ class PPipeline( object ) :
         self.m_cloudClusterer = PCloudClusterMaker()
         # create classifier and load model from disk
         self.m_classifier = PClassifierSVM()
+        # self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
         self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
-        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 1 )
+        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 2 )
 
     def _createPublishers( self ) :
         # publishers to send the filtered table and objects to RViz

@@ -144,7 +144,7 @@ To do this, the simplest technique is to use some information of the scene, whic
 
 ![Passthrough filtering][img_cutting]
 
-The filter that implements this is the **Passthrough** filter, which cuts a whole **region** along a certain **axis** ( two more parameters to choose ).
+The filter that implements this is the **Passthrough** filter, which cuts a whole **region** along a certain **axis** and between a range given by two values ( three more parameters to choose ).
 
 ![Passthrough intuition][img_passthrough_intuition]
 
@@ -337,7 +337,7 @@ We used the following approach :
 
 Each histogram consists of 3 vectors ( 3 for **hsv** channels in the colors histograms, and 3 for **xyz** channels in the normals histograms ). We then just concatenate these into a single vector, which is the feature to be used for our classifier.
 
-The implementation of the features extraction can be found in the [**PUtils**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PUtils.py) file ( lines )
+The implementation of the features extraction can be found in the [**PUtils**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PUtils.py) file ( lines 301-389 )
 
 We will later talk a bit more about the experimets run to tune the number of bins to use for each histogram, when we discuss some code implementation details.
 
@@ -433,3 +433,24 @@ And the `output*.yaml` files we got can be found in the following links :
 *   [**output1.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output1.yaml)
 *   [**output2.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output2.yaml)
 *   [**output3.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/output3.yaml)
+
+## **SVM model selection**
+
+There are some parameters that we had to choose to make our classifier, and they were the following :
+
+*   Color space to use for color histograms
+*   Bin sizes for the colors histograms
+*   Bin sizes for the normals histograms
+*   Amount of data to take from the training scene
+*   SVM kernel and related parameters
+*   SVM regularization parameter C
+
+The first one we found that the **HSV** colorspace worked better, so we kept using it. We tried first RGB and the accuracy for the RGB case, keeping the same configuration for both, was lower by a big margin compared to the HSV case.
+
+We tuned the other parameters by testing over the whole space given by these parameters. We first took a big batch of data of 2000 samples for each object in the training scene, and 
+
+TODO: Talk about how we selected the parameters of the svm model, and the features properties and how we chose them
+
+## **Extra-pipeline implementation**
+
+TODO: Talk about how we implemented the extra requirements

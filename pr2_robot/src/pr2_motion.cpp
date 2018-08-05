@@ -393,8 +393,8 @@ bool PR2Motion::OperateRightGripper(const bool &close_gripper)
   // Set finger joint values
   if (close_gripper)
   {
-    gripper_joint_positions[0] = 0.04;
-    gripper_joint_positions[1] = 0.04;
+    gripper_joint_positions[0] = 0.08;
+    gripper_joint_positions[1] = 0.08;
   }
   else
   {
@@ -403,7 +403,7 @@ bool PR2Motion::OperateRightGripper(const bool &close_gripper)
   }
 
   right_gripper_group.setJointValueTarget(gripper_joint_positions);
-  ros::Duration(1.5).sleep();
+  ros::Duration(2.5).sleep();
 
   bool success = right_gripper_group.move() == moveit::planning_interface::MoveItErrorCode::SUCCESS;
   return success;

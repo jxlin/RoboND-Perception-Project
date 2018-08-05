@@ -50,7 +50,7 @@ class PSession :
         self.kernel = 'linear'
         self.gamma = 1.0
         self.C = 1.0
-        self.degree = 1.0
+        self.degree = 1
         self.dataPercent = 0.5
         self.trainSize = 0
 
@@ -114,8 +114,8 @@ class PClassifierSVM( object ) :
         #     _opts_degree = [ 2, 3, 4 ]
 
         # make schedule for sessions
-        _opts_nbinsColors = [ 32, 128, 255 ]
-        _opts_nbinsNormals = [ 50, 150, 250 ]
+        _opts_nbinsColors = [ 32, 128 ]
+        _opts_nbinsNormals = [ 50, 150 ]
         _opts_kernel = [ 'linear' ]
         _opts_C = [ 0.1, 1.0, 10.0 ]
         _opts_degree = [ 1 ]
@@ -219,7 +219,8 @@ class PClassifierSVM( object ) :
         # create the svm model
         session.model = svm.SVC( kernel = session.kernel, 
                                  C = session.C, 
-                                 gamma = session.gamma )
+                                 gamma = session.gamma,
+                                 degree = session.degree )
         # 5-fold cross validation
         session.kf = cross_validation.KFold( len( session.trainX ),
                                              n_folds = 5,
@@ -381,6 +382,7 @@ class PClassifierSVM( object ) :
     whose features are assumed to be stored in the form [<dataC1>,<dataC2>,...,<dataC8>]
 
     : param datafile : filepath to the .sav file that holds the dataset
+    : param modelname : model for the savefile
     """
     def train( self, datafile, modelname = 'model' ) :
         plt.ion()
@@ -390,11 +392,12 @@ class PClassifierSVM( object ) :
         self.m_sessionDataX, self.m_sessionDataY = self._splitFeaturesLabels( _dataSet )
         # make session
         _sess = PSession()
-        _sess.nbinsColors = 255
-        _sess.nbinsNormals = 250
-        _sess.kernel = 'linear'
-        _sess.C = 1.0
+        _sess.nbinsColors = 128
+        _sess.nbinsNormals = 50
+        _sess.kernel = 'poly'
+        _sess.C = 10.0
         _sess.gamma = 1.0
+        _sess.degree = 3
         _sess.dataPercent = 1.0
         _sess.trainSize = int( 1.0 * len( _dataSet ) )
         # train using session
