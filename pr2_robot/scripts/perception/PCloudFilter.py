@@ -12,7 +12,9 @@ from PUtils import *
 
 class PCloudFilterParams :
     # Voxel grid downsample params
-    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+    # VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+    # VOXEL_LEAF_SIZE = [ 0.005, 0.005, 0.005 ]
+    VOXEL_LEAF_SIZE = [ 0.0035, 0.0035, 0.0035 ]
     # Passthrough filter params - z
     PASSTHROUGH_AXIS_Z = 'z'
     PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
@@ -43,12 +45,12 @@ class PCloudFilter ( object ) :
         # print 'START TIMING - FILTERING ******************'
         _t1 = time.time()
         _fcloud = self._denoise( cloud )
+        if optpub is not None :
+            optpub.publish( pcl_to_ros( _fcloud ) )
         _t2 = time.time()
         _fcloud = self._voxelGridDownsample( _fcloud )
         _t3 = time.time()
         _fcloud = self._passThroughFiltering( _fcloud )
-        # if optpub is not None :
-        #     optpub.publish( pcl_to_ros( _fcloud ) )
         _t4 = time.time()
         _tableCloud, _objectsCloud = self._ransacSegmentation( _fcloud )
         _t5 = time.time()

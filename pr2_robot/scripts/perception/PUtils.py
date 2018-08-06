@@ -242,7 +242,7 @@ def send_to_yaml(yaml_filename, dict_list):
 #############################################################################
 
 """
-Transforms one histogram to another
+Transforms one histogram to another with smaller bin size
 
 : param hist : source histogram
 : param nbins : target number of bins of the transformed histogram
@@ -274,8 +274,9 @@ Adapted from this post: https://stackoverflow.com/questions/5328556/histogram-ma
 : param hist : numpy histogram
 : param rmin : min range for the values of the histogram
 : param rmax : max range for the values of the histogram
+: param title : optional title for the histogram
 """
-def plotHistogram( hist, rmin, rmax ) :
+def plotHistogram( hist, rmin, rmax, title = 'empty title' ) :
     _nbins = len( hist )
     _bins = np.linspace( rmin, rmax, num = ( _nbins + 1 ), endpoint = True )
     _widths = np.diff( _bins )
@@ -283,7 +284,8 @@ def plotHistogram( hist, rmin, rmax ) :
     
     plt.figure()
     plt.bar( _centers, hist, align = 'center', width = _widths )
-    plt.xticks( _bins )
+    plt.title( title )
+    # plt.xticks( _bins )
 
 """
 Normalizes a histogram to have cumsum = 1 ( percentages instead of frequencies )

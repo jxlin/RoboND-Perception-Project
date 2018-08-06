@@ -29,6 +29,17 @@
 [img_clustering]: imgs/img_clustering.png
 [img_classification]: imgs/img_cloud_clusters_labels.png
 
+[img_histogram_hue_scaling]: imgs/img_histogram_scaling_hue.png
+[img_histogram_nx_scaling]: imgs/img_histogram_scaling_nx.png
+
+[img_results_sc1_klinear]: imgs/img_results_sc1_klinear.png
+[img_results_sc2_klinear]: imgs/img_results_sc2_klinear.png
+[img_results_sc3_klinear]: imgs/img_results_sc3_klinear.png
+
+[img_results_sc1_kpoly]: imgs/img_results_sc1_kpoly.png
+[img_results_sc2_kpoly]: imgs/img_results_sc2_kpoly.png
+[img_results_sc3_kpoly]: imgs/img_results_sc3_kpoly.png
+
 ## **About the project**
 
 This project consists in the implementation of the perception pipeline for a more advance **pick & place** task, which consists of a **PR2** robot picking objects from a table and placing them into the correct containers.
@@ -117,7 +128,7 @@ We used the **pcl**'s voxelgrid filter, which is used in the **_voxelGridDownsam
 
 ```python
     # Voxel grid downsample params
-    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+    VOXEL_LEAF_SIZE = [ 0.0035, 0.0035, 0.0035 ]
 
     # ...
 
@@ -289,7 +300,7 @@ We reused some of the code made for the previous [**Kinematics**](https://github
 
 class PCloudFilterParams :
     # Voxel grid downsample params
-    VOXEL_LEAF_SIZE = [ 0.01, 0.01, 0.01 ]
+    VOXEL_LEAF_SIZE = [ 0.0035, 0.0035, 0.0035 ]
     # Passthrough filter params - z
     PASSTHROUGH_AXIS_Z = 'z'
     PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
@@ -445,11 +456,223 @@ There are some parameters that we had to choose to make our classifier, and they
 *   SVM kernel and related parameters
 *   SVM regularization parameter C
 
-The first one we found that the **HSV** colorspace worked better, so we kept using it. We tried first RGB and the accuracy for the RGB case, keeping the same configuration for both, was lower by a big margin compared to the HSV case.
+For the first one we found that the **HSV** colorspace worked better, so we kept using it. We tried first RGB and the accuracy for the RGB case, keeping the same configuration for both RGB and HSV cases, was lower by a big margin compared to the HSV case.
 
-We tuned the other parameters by testing over the whole space given by these parameters. We first took a big batch of data of 2000 samples for each object in the training scene, and 
+We tuned the other parameters by testing over the whole space given by these parameters. 
 
-TODO: Talk about how we selected the parameters of the svm model, and the features properties and how we chose them
+### _**Bin sizes and training batches**_
+
+The way we started checking bin sizes was slow, as we had to choose the binsize and then take the training data for that size. If we wanted to test different bin sizes we had to start over and take the data again.
+
+Because of this issue, we chose to first take a big batch of data with a **maximum** bin size, from which we could then tune it to a smaller value.
+
+The big batch of data that we took can be found ( as a pickle .sav file ) in the **data/samples/** folder. The file we used for our experiments is the **training_set_2000.sav** file, which contains **2000** training samples for each category of the picklist ( 8 in our case ).
+
+We then implemented the appropiate functionality to downsample our histograms to smaller binsizes, which can be found in the **hist2hist** method, in the [**PUtils.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PUtils.py) file.
+
+```python
+"""
+Transforms one histogram to another with smaller bin size
+
+: param hist : source histogram
+: param nbins : target number of bins of the transformed histogram
+"""
+def hist2hist( hist, nbins ) :
+    assert ( len( hist ) >= nbins )
+
+    _rmin = np.min( hist )
+    _rmax = np.max( hist )
+
+    _newhist = np.zeros( nbins )
+    _newedges = np.linspace( _rmin, _rmax, num = ( nbins + 1 ), endpoint = True )
+    
+    # compute bin sizes, new and old, for indexing
+    _newbinsize = ( _rmax - _rmin ) / nbins
+    _oldbinsize = ( _rmax - _rmin ) / len( hist )
+
+    for i in range( nbins ) :
+        _startIndx = int( math.floor( _newedges[i] / _oldbinsize ) )
+        _stopIndx  = int( math.floor( _newedges[i + 1] / _oldbinsize ) - 1 )
+        _newhist[i] = hist[ _startIndx : ( _stopIndx + 1 ) ].sum()
+
+    return _newhist
+```
+
+Then, when doing the training experiments to tune the parameters of our model we chose different bin sizes taken from the base binsize, and then generated the appropiate batches of data for the experiments using the **_generateSessionBatch** method, in the [**PClassifierSVM.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PClassifierSVM.py) file.
+
+```python
+    """
+    Generate new samples from the given samples by ...
+    reshaping using different histograms sizes
+    """
+    def _generateSessionBatch( self, nbinsColors, nbinsNormals, dataX ) :
+        # We start with a huge bag of data with ...
+        # DATASET_COLOR_HIST_BINS, DATASET_NORMAL_HIST_BINS ...
+        # as base size of the histograms. From there, we modify the ...
+        # size according to the required sizes
+        _batchX = []
+        for _x in dataX :
+            # extract color and normals histogram
+            _x_chist = _x[0:(3 * DATASET_COLOR_HIST_BINS)]
+            _x_nhist = _x[(3 * DATASET_COLOR_HIST_BINS):]
+            _x_chist_channels = np.array_split( _x_chist, 3 )
+            _x_nhist_channels = np.array_split( _x_nhist, 3 )
+            # convert each histogram channel to the desired sizes
+            _sx_chist_channels = [ hist2hist( _x_chist_channels[i], nbinsColors )
+                                   for i in range( len( _x_chist_channels ) ) ]
+            _sx_nhist_channels = [ hist2hist( _x_nhist_channels[i], nbinsNormals )
+                                   for i in range( len( _x_nhist_channels ) ) ]
+            _sx_chist = np.concatenate( _sx_chist_channels ).astype( np.float64 )
+            _sx_nhist = np.concatenate( _sx_nhist_channels ).astype( np.float64 )
+            _batchX.append( np.concatenate( [ _sx_chist, _sx_nhist ] ) )
+
+        return np.array( _batchX )
+```
+
+For a testing script on how we scaled the bin sizes just check the [**test_features.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/tests/test_features.py) file. A sample is shown in the following figures:
+
+![HISTOGRAM SCALING HUE][img_histogram_hue_scaling]
+
+![HISTOGRAM SCALING NX][img_histogram_nx_scaling]
+
+There we have the histograms for the **Hue** and **NormalX** parts of the feature vector, each with the base size of 255 and 250, respectively, and downsampled to 64 and 50.
+
+### **_SVM model parameters_**
+
+The other parameters we had to tune were the SVM parameters of the classifier, which consists of :
+
+*   **Kernel** : _linear_, _rbf_ and _poly_. Depending of the kernel we may use _gamma_ and _degree_ parameters ( if we use rbf or poly as kernels )
+*   **Regularization** : Amount of regularization for our model
+
+We explain in the next subsection how we tuned these parameters.
+
+### **_Parameter tuning and experiments_**
+
+Taking all the mentioned parameters into account we proceed to make experiments by running several training **sessions** and checking which combination yield better results. The full implementation of our experiments can be found in the [**PClassifierSVM.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PClassifierSVM.py) file.
+
+We encapsulated all these parameters into a **session** object, which also includes other elements, like the data batch used, resulting accuracy, trained model, etc.
+
+```python
+class PSession :
+    
+    def __init__( self ) :
+        # svm model 
+        self.model = None
+        # input and output converters
+        self.inScaler = None
+        self.outEncoder = None
+        # k-fold cross validator
+        self.kf = None
+        # scores and predictions
+        self.scores = None
+        self.predictions = None
+        self.accuracyScore = None
+
+        # training data
+        self.trainX = None
+        self.trainY = None
+
+        # session parameters
+        self.nbinsColors = 1
+        self.nbinsNormals = 1
+        self.kernel = 'linear'
+        self.gamma = 1.0
+        self.C = 1.0
+        self.degree = 1
+        self.dataPercent = 0.5
+        self.trainSize = 0
+```
+
+We defined a training **schedule** for the options we could take, and generated sessions based on this schedule. This can be found in the **startTrainingSchedule** method, which defines all the options for the experiments.
+
+We then run all the sessions and saved the results ( confusion matrices and scores ) for later checking, and also sorted to show the best in the top of the list saved. All models accuracies were obtained by using **5-fold** **crossvalidation**.
+
+The final results can be found in the [**resultsKlinear**]() and [**resultsKpoly**]() files. ( The following shows only the top 10 models, the full list can be found in the appropiate files)
+
+```txt
+TOP 10 LINEAR MODELS
+nc : binsize colors histogram [ 32, 128, 255 ]
+nn : binsize normals histogram [ 50, 150, 250 ]
+size : number training samples [ 10%, 50%, 100% ] -> [ 1600, 8000, 16000 ]
+C : amount of regularization [ 0.1, 1.0, 10.0 ]
+
+
+sess_kernel_linear_C_0.1_dg_1_gamma_1.0_nc_255_nn_50_size_16000 - 0.959625
+sess_kernel_linear_C_0.1_dg_1_gamma_1.0_nc_128_nn_50_size_16000 - 0.9595625
+sess_kernel_linear_C_1.0_dg_1_gamma_1.0_nc_128_nn_50_size_16000 - 0.955
+sess_kernel_linear_C_0.1_dg_1_gamma_1.0_nc_32_nn_50_size_16000 - 0.9538125
+sess_kernel_linear_C_10.0_dg_1_gamma_1.0_nc_128_nn_50_size_16000 - 0.9534375
+sess_kernel_linear_C_1.0_dg_1_gamma_1.0_nc_255_nn_50_size_16000 - 0.9524375
+sess_kernel_linear_C_1.0_dg_1_gamma_1.0_nc_32_nn_50_size_16000 - 0.9513125
+sess_kernel_linear_C_10.0_dg_1_gamma_1.0_nc_255_nn_50_size_16000 - 0.9504375
+sess_kernel_linear_C_10.0_dg_1_gamma_1.0_nc_32_nn_50_size_16000 - 0.94875
+sess_kernel_linear_C_0.1_dg_1_gamma_1.0_nc_255_nn_150_size_16000 - 0.9454375
+```
+
+```txt
+TOP 10 POLYNOMIAL MODELS
+nc : binsize colors histogram [ 32, 128 ]
+nn : binsize normals histogram [ 50, 150 ]
+size : number training samples [ 10%, 50%, 100% ] -> [ 1600, 8000, 16000 ]
+C : amount of regularization [ 0.1, 1.0, 10.0 ]
+dg : degree of the polynomial kernel [ 2, 3, 4 ]
+
+sess_kernel_poly_C_0.1_dg_3_gamma_1.0_nc_128_nn_50_size_16000 - 0.974375
+sess_kernel_poly_C_1.0_dg_3_gamma_1.0_nc_128_nn_50_size_16000 - 0.974375
+sess_kernel_poly_C_10.0_dg_3_gamma_1.0_nc_128_nn_50_size_16000 - 0.974375
+sess_kernel_poly_C_0.1_dg_2_gamma_1.0_nc_128_nn_50_size_16000 - 0.96075
+sess_kernel_poly_C_1.0_dg_2_gamma_1.0_nc_128_nn_50_size_16000 - 0.96075
+sess_kernel_poly_C_10.0_dg_2_gamma_1.0_nc_128_nn_50_size_16000 - 0.96075
+sess_kernel_poly_C_0.1_dg_3_gamma_1.0_nc_128_nn_50_size_8000 - 0.955375
+sess_kernel_poly_C_1.0_dg_3_gamma_1.0_nc_128_nn_50_size_8000 - 0.955375
+sess_kernel_poly_C_10.0_dg_3_gamma_1.0_nc_128_nn_50_size_8000 - 0.955375
+sess_kernel_poly_C_0.1_dg_2_gamma_1.0_nc_128_nn_150_size_16000 - 0.9550625
+```
+
+### **_Results_**
+
+From the results of the experiments we decided to pick the best models that have the largest regularization possible ( 10.0 in our experiments ), as they may generalize better. We tested both the **linear** and **polynomial** cases and check if they passed the requirements.
+
+#### **Linear kernel**
+
+For the linear case we used the following model :
+
+*   Bin size for colors histograms : 128
+*   Bin size for normals histograms : 50
+*   Training size : 100% of the dataset
+*   Regularization parameter : 10.0
+
+This is the model that yield the better results when testing in simulation, as it passed the requirements with the following results :
+
+*   **3/3** in **test1.world**
+*   **5/5** in **test2.world**
+*   **8/8** in **test3.world**
+
+This model gave an accuracy of **95%** in the experiments, and generalized well to our pick-place scenarios. The resulting predicted labels for each scenario are shown in the following figures.
+
+![RESULTS SCENE 1 LINEAR KERNEL][img_results_sc1_klinear]
+
+
+![RESULTS SCENE 2 LINEAR KERNEL][img_results_sc2_klinear]
+
+
+![RESULTS SCENE 3 LINEAR KERNEL][img_results_sc3_klinear]
+
+#### **Polynomial kernel**
+
+For the polynomial case we used the following model :
+
+*   Bin size for colors histograms : 128
+*   Bin size for normals histograms : 50
+*   Training size : 100% of the dataset
+*   Regularization parameter : 10.0
+*   Degree : 3 ( cubic )
+
+We first tried it with the configuration from before ( same filtering and clustering parameters ) and found that it didn't do a good joob at all, even though its accuracy was of **98%**. We found the problem after playing with the filtering and clustering parameters, changing the leafsize of the downsampling step.
+
+This allowed to have more points for the histograms, which made the features more representative to the model trained, as the model was trained with features got from a richer pointcloud ( not downsampled ). Even though normalization was applied to ensure that the histogram has values between 0-1, we found great improvements by reducing the downsampling.
+
+The model with the polynomial kernel got an **8/8** in scene 3, which the linear model could not achieve. However, it did not perform as well as the model with the linear kernel in scenes 1 and 2, as it missed one object in each case, so it seems it was not generalizing well enough.
 
 ## **Extra-pipeline implementation**
 

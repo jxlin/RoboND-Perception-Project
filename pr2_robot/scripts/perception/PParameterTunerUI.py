@@ -148,7 +148,7 @@ class PParameterTunerUI( QWidget ) :
 
         self.m_sldClusteringClusterTolerance = self._makeSlider( 0.01, 1, 0.025, 'ClusterTolerance' )
         self.m_sldClusteringMinClusterSize = self._makeSlider( 10.0, 1000.0, 30, 'MinClusterSize' )
-        self.m_sldClusteringMaxClusterSize = self._makeSlider( 10.0, 4000.0, 1000, 'MaxClusterSize' )
+        self.m_sldClusteringMaxClusterSize = self._makeSlider( 10.0, 10000.0, 1000, 'MaxClusterSize' )
 
         _ui_vbox.addLayout( self.m_sldClusteringClusterTolerance.getLayout() )
         _ui_vbox.addLayout( self.m_sldClusteringMinClusterSize.getLayout() )
@@ -251,7 +251,7 @@ class PParameterTunerUI( QWidget ) :
     """
     def _processCloud( self, cloud ) :
             # apply filtering *************************************************************
-            _tableCloud, _objectsCloud = self.m_filter.apply( cloud )
+            _tableCloud, _objectsCloud,_sceneCloud = self.m_filter.apply( cloud )
             # apply clustering
             _clustersClouds, _clustersCloudViz = self.m_clusterGen.cluster( _objectsCloud )
             # *****************************************************************************

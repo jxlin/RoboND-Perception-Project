@@ -51,10 +51,11 @@ class PPipeline( object ) :
         self.m_cloudClusterer = PCloudClusterMaker()
         # create classifier and load model from disk
         self.m_classifier = PClassifierSVM()
-        # self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
-        self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
+        self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
+        # self.m_classifier.loadModel( '../data/models/model_kpoly_deg3_c128_n50_sz2000_C10.sav' )
+        # self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
-        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 2 )
+        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 3 )
 
     def _createPublishers( self ) :
         # publishers to send the filtered table and objects to RViz
@@ -99,8 +100,8 @@ class PPipeline( object ) :
         # SEGMENTATION AND CLUSTERING ###################################
 
         # apply segmentation
-        # _tableCloud, _objectsCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
-        _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl )
+        # _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
+        _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
         # apply clusterer
         _clustersClouds, _clustersCloudViz = self.m_cloudClusterer.cluster( _objectsCloud )
         # transforms results for publishers
@@ -127,10 +128,10 @@ class PPipeline( object ) :
             _rosObjCloud = pcl_to_ros( _objCloud )
             ## Compute features #########################################
             # colors histograms
-            _chists = computeColorHistograms( _rosObjCloud, nbins = 255 )
+            _chists = computeColorHistograms( _rosObjCloud, nbins = 128 )
             # normals histograms
             _normalsCloud = self.getNormals( _rosObjCloud )
-            _nhists = computeNormalHistograms( _normalsCloud, nbins = 250 )
+            _nhists = computeNormalHistograms( _normalsCloud, nbins = 50 )
             # make the feature vector
             _featureVector = np.concatenate( ( _chists, _nhists ) )
             #############################################################
@@ -161,13 +162,13 @@ class PPipeline( object ) :
         if self.m_state == STATE_IDLE :
             # check if there are objects in the scene
             _detectedObjects, _sceneCloud = self._findObjects( cloudMsg )
-            # check if there is at least one object to pick
-            if ( len( _detectedObjects ) > 0 ) and \
-               ( self.m_pickplaceHandler.checkSinglePick( _detectedObjects ) ) :
-                # start the scanning-picking process
-                print 'CHANGE TO STATE: STATE_SCANNING_LEFT'
-                self.m_state = STATE_SCANNING_LEFT
-                self.m_pickplaceHandler.startScanningPickingProcess( _detectedObjects, _sceneCloud )
+            # # check if there is at least one object to pick
+            # if ( len( _detectedObjects ) > 0 ) and \
+            #    ( self.m_pickplaceHandler.checkSinglePick( _detectedObjects ) ) :
+            #     # start the scanning-picking process
+            #     print 'CHANGE TO STATE: STATE_SCANNING_LEFT'
+            #     self.m_state = STATE_SCANNING_LEFT
+            #     self.m_pickplaceHandler.startScanningPickingProcess( _detectedObjects, _sceneCloud )
 
         elif self.m_state == STATE_SCANNING_LEFT :
             _finished = self.m_pickplaceHandler.makeLeftScan( ros_to_pcl( cloudMsg ) )
