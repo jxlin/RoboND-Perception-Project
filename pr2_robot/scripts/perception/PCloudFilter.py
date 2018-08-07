@@ -18,7 +18,7 @@ class PCloudFilterParams :
     # Passthrough filter params - z
     PASSTHROUGH_AXIS_Z = 'z'
     PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
-    # Passthrough filter params - x
+    # Passthrough filter params - y
     PASSTHROUGH_AXIS_Y = 'y'
     PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
     # RANSAC segmentation params

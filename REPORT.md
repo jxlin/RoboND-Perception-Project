@@ -40,6 +40,10 @@
 [img_results_sc2_kpoly]: imgs/img_results_sc2_kpoly.png
 [img_results_sc3_kpoly]: imgs/img_results_sc3_kpoly.png
 
+[gif_results_sc1]: imgs/gif_results_sc1.gif
+[gif_results_sc2]: imgs/gif_results_sc2.gif
+[gif_results_sc3]: imgs/gif_results_sc3.gif
+
 ## **About the project**
 
 This project consists in the implementation of the perception pipeline for a more advance **pick & place** task, which consists of a **PR2** robot picking objects from a table and placing them into the correct containers.
@@ -50,9 +54,13 @@ We make use of the RGB-D camera in the **PR2** robot, which give us **Point Clou
 
 ![POINT CLOUD DATA][img_intro_1]
 
-Using this pointcloud data we apply the perception pipeline in order to recognize each object in the scene, as shown in the following picture.
+Using this pointcloud data we apply the perception pipeline in order to recognize each object in the scene, as shown in the following figures.
 
-![POINT CLOUD DATA LABELS][img_intro_2]
+![POINT CLOUD DATA LABELS SC1][gif_results_sc1]
+
+![POINT CLOUD DATA LABELS SC2][gif_results_sc2]
+
+![POINT CLOUD DATA LABELS SC3][gif_results_sc3]
 
 This project is the result of the **perception** lectures of the RoboND nanodegree, in which we learned the necessary steps to implement the perception pipeline, namely :
 
@@ -116,7 +124,7 @@ The call to the pcl function is located in the **_denoise** method in the [**PCl
 
 ### 2. _**Downsampling**_
 
-One way to save computation is working in a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud for the next stages of the pipeline.
+One way to save computation is working with a pointcloud with less datapoints ( kind of like working with a smaller resolution image ). This can be achieved by downsampling the pointcloud, which give us a less expensive cloud for the next stages of the pipeline.
 
 ![Downsample filtering][img_downsampling]
 
@@ -169,7 +177,7 @@ We used 2 pcl's passthrough filter in this step ( **z** and **y** axes ) with li
     # Passthrough filter params - z
     PASSTHROUGH_AXIS_Z = 'z'
     PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
-    # Passthrough filter params - x
+    # Passthrough filter params - y
     PASSTHROUGH_AXIS_Y = 'y'
     PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
 
@@ -304,7 +312,7 @@ class PCloudFilterParams :
     # Passthrough filter params - z
     PASSTHROUGH_AXIS_Z = 'z'
     PASSTHROUGH_LIMITS_Z = [ 0.608, 0.88 ]
-    # Passthrough filter params - x
+    # Passthrough filter params - y
     PASSTHROUGH_AXIS_Y = 'y'
     PASSTHROUGH_LIMITS_Y = [ -0.456, 0.456 ]
     # RANSAC segmentation params
@@ -325,7 +333,7 @@ class PCloudClusterMakerParams :
 
 The implementation of the tool can be found in the [**PParameterTunerUI.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PParameterTunerUI.py) file. 
 
-Also, we checked the time cost that each step took ( just in case ), and got the following costs :
+Also, we checked the time cost that each step took ( just in case ), and got the ~~~following costs~~~ ( _**we tweaked a bit the parameters when we changed to a better linear model, that gave 8/8 in scene 3, and the pipeline might take a bit longer than the presented values**_ ) :
 
 *   **Filtering** : _Denoising_ ~ 1300ms, _Downsampling_ ~ 36ms, _Passthrough_ ~ 0.5ms, _RANSAC_ ~ 1.8ms
 *   **Clustering** : _DBSCAN_ ~ 8ms
@@ -337,7 +345,7 @@ The last step of the pipeline is to transform the clusters into feature vectors 
 
 ### 1. _**Feature extraction**_
 
-The features extracted consists of histograms for the colors and normals from the pointcloud of each cluster.
+The features extracted consist of histograms for the colors and normals from the pointcloud of each cluster.
 
 ![FEATURES pipeline][img_pipeline_features]
 
@@ -361,13 +369,12 @@ With the features vector computed in the previous step we can finally apply our 
 We used Scikit-learn to create and train the SVM classifier, with the following parameters :
 
 *   **Kernel**: linear
-*   **C**: 1.0
-*   **gamma**: 1.0
-*   **dimensionality**: 1515 = _color_fvector_size_ + _normal_fvector_size_ = 255 * 3 + 250 * 3
+*   **C**: 10.0
+*   **dimensionality**: 534 = _color_fvector_size_ + _normal_fvector_size_ = 128 * 3 + 50 * 3
 
 The results we got for the previous clusters are shown in the following figure :
 
-![CLASSIFICATION result][img_classification]
+![CLASSIFICATION result][img_results_sc3_klinear]
 
 The classifier implementation can be found in the [**PClassifierSVM.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PClassifierSVM.py) file. We will talk more about the implementation later when we discuss some details about the code implementation of the project.
 
@@ -389,7 +396,7 @@ This whole step is implemented in the [**PPickPlaceHandler.py**](https://github.
 *   Handle a request from the pipeline to pick a list of classified objects ( **pickObjectsFromList** method )
 *   Make single requests for the pick & place operation, by making the appropiate request messages ( **_pickObject** method ) and saving the **.yaml** dictionary version of the request, as required.
 
-Below we show how me build the request message :
+Below we show how we build the service request :
 
 ```python
     def _pickObject( self, pobject, callservice ) :
@@ -415,7 +422,10 @@ Below we show how me build the request message :
                                     _req.object_name,
                                     _req.pick_pose,
                                     _req.place_pose )
-        ## Send pick and place request #############
+        ## start pick and place request ########################
+
+        # rotate to account for the collision map
+
 
         if callservice :
             # Wait for 'pick_place_routine' service to come up
@@ -430,13 +440,14 @@ Below we show how me build the request message :
                                         _req.place_pose )
 
                 print ( "Response: ", resp.success )
+                return _yamlDict, resp.success
 
             except rospy.ServiceException, e:
                 print "Service call failed: %s"%e
 
-        ############################################
-**output1.yaml**
-        return _yamlDict
+        ########################################################
+
+        return _yamlDict, None
 ```
 
 And the `output*.yaml` files we got can be found in the following links :
@@ -541,7 +552,7 @@ There we have the histograms for the **Hue** and **NormalX** parts of the featur
 
 The other parameters we had to tune were the SVM parameters of the classifier, which consists of :
 
-*   **Kernel** : _linear_, _rbf_ and _poly_. Depending of the kernel we may use _gamma_ and _degree_ parameters ( if we use rbf or poly as kernels )
+*   **Kernel** : _linear_, _rbf_ and _poly_. Depending of the kernel we may use the _gamma_ and _degree_ parameters ( if we use rbf or poly as kernels )
 *   **Regularization** : Amount of regularization for our model
 
 We explain in the next subsection how we tuned these parameters.
@@ -672,8 +683,28 @@ We first tried it with the configuration from before ( same filtering and cluste
 
 This allowed to have more points for the histograms, which made the features more representative to the model trained, as the model was trained with features got from a richer pointcloud ( not downsampled ). Even though normalization was applied to ensure that the histogram has values between 0-1, we found great improvements by reducing the downsampling.
 
-The model with the polynomial kernel got an **8/8** in scene 3, which the linear model could not achieve. However, it did not perform as well as the model with the linear kernel in scenes 1 and 2, as it missed one object in each case, so it seems it was not generalizing well enough.
+The model with the polynomial kernel got an **8/8** in scene 3, which the linear model could not achieve before proper tuning. However, it did not perform as well as the model with the linear kernel in scenes 1 and 2, as it missed one object in each case, so it seems it was not generalizing well enough.
+
+![RESULTS SCENE 1 POLY KERNEL][img_results_sc1_kpoly]
+
+
+![RESULTS SCENE 2 POLY KERNEL][img_results_sc2_kpoly]
+
+
+![RESULTS SCENE 3 POLY KERNEL][img_results_sc3_kpoly]
 
 ## **Extra-pipeline implementation**
 
-TODO: Talk about how we implemented the extra requirements
+We implemented the extra steps required for the pick-place service call operation. These include creating a collision map for the planner, and making the service call using the already extracted information for the detected objects.
+
+### _**Rotation**_
+
+TODO
+
+### _**Collision map**_
+
+TODO
+
+### _**Pick & place state machine**_
+
+TODO
