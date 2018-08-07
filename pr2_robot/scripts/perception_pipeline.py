@@ -39,10 +39,23 @@ class PPipeline( object ) :
         super( PPipeline, self ).__init__()
         # state the pipeline is in
         self.m_state = STATE_IDLE
+        # initialize some parameters from the rosparam server
+        self._initServerParams()
         # initialize resources
         self._createPipeline()
         self._createPublishers()
         self._createSubscribers()
+
+    def _initServerParams( self ) :
+        # get the parameters for the pipeline
+        _rosPipelineParamsList = rospy.get_param( '/pipeline' )
+        self.m_pname = _rosPipelineParamsList[0]['name']
+        self.m_pmodel = _rosPipelineParamsList[0]['model']
+        self.m_ppickplace = _rosPipelineParamsList[0]['pickplace']
+
+        print 'pname: ', self.m_pname
+        print 'pmodel: ', self.m_pmodel
+        print 'ppickplace: ', self.m_ppickplace
 
     def _createPipeline( self ) :
         # cloud filterer
@@ -51,11 +64,12 @@ class PPipeline( object ) :
         self.m_cloudClusterer = PCloudClusterMaker()
         # create classifier and load model from disk
         self.m_classifier = PClassifierSVM()
-        self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
+        self.m_classifier.loadModel( '../data/models/' + self.m_pmodel + '.sav' )
+        # self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
         # self.m_classifier.loadModel( '../data/models/model_kpoly_deg3_c128_n50_sz2000_C10.sav' )
         # self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
-        self.m_pickplaceHandler = PPickPlaceHandler( sceneNum = 3 )
+        self.m_pickplaceHandler = PPickPlaceHandler()
 
     def _createPublishers( self ) :
         # publishers to send the filtered table and objects to RViz
@@ -101,7 +115,7 @@ class PPipeline( object ) :
 
         # apply segmentation
         # _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
-        _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl, self.m_pubVizDummyCloud )
+        _tableCloud, _objectsCloud, _sceneCloud = self.m_cloudFilterer.apply( _cloudPcl )
         # apply clusterer
         _clustersClouds, _clustersCloudViz = self.m_cloudClusterer.cluster( _objectsCloud )
         # transforms results for publishers
@@ -141,7 +155,7 @@ class PPipeline( object ) :
             # Publish label to RViz
             _labelPos = list( _clustersClouds[i][0] )
             _labelPos[2] += 0.4
-            self.m_pubVizObjectsMarkers.publish( make_label( _predictedLabel, _labelPos, i ) )
+            self.m_pubVizObjectsMarkers.publish( make_label( _predictedLabel, _labelPos, i, duration = 7.0 ) )
             # Add the detected object to the list of detected objects
             _do = DetectedObject()
             _do.label = _predictedLabel
@@ -162,13 +176,15 @@ class PPipeline( object ) :
         if self.m_state == STATE_IDLE :
             # check if there are objects in the scene
             _detectedObjects, _sceneCloud = self._findObjects( cloudMsg )
-            # # check if there is at least one object to pick
-            # if ( len( _detectedObjects ) > 0 ) and \
-            #    ( self.m_pickplaceHandler.checkSinglePick( _detectedObjects ) ) :
-            #     # start the scanning-picking process
-            #     print 'CHANGE TO STATE: STATE_SCANNING_LEFT'
-            #     self.m_state = STATE_SCANNING_LEFT
-            #     self.m_pickplaceHandler.startScanningPickingProcess( _detectedObjects, _sceneCloud )
+            # if the pickplace flag is set in the parameter server, allow picking
+            if self.m_ppickplace :
+                # check if there is at least one object to pick
+                if ( len( _detectedObjects ) > 0 ) and \
+                ( self.m_pickplaceHandler.checkSinglePick( _detectedObjects ) ) :
+                    # start the scanning-picking process
+                    print 'CHANGE TO STATE: STATE_SCANNING_LEFT'
+                    self.m_state = STATE_SCANNING_LEFT
+                    self.m_pickplaceHandler.startScanningPickingProcess( _detectedObjects, _sceneCloud )
 
         elif self.m_state == STATE_SCANNING_LEFT :
             _finished = self.m_pickplaceHandler.makeLeftScan( ros_to_pcl( cloudMsg ) )

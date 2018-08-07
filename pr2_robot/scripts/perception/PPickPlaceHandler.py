@@ -15,9 +15,12 @@ from std_msgs.msg import Float64
 from std_msgs.msg import Int32
 from std_msgs.msg import String
 from sensor_msgs.msg import JointState
+from gazebo_msgs.msg import ModelStates
+# some service requests definitions
 from pr2_robot.srv import *
 from std_srvs.srv import *
 # some utils we will need
+from sensor_stick.marker_tools import *
 from PUtils import *
 
 def comparatorDistance( obj ) :
@@ -36,13 +39,14 @@ class PPickObject( object ) :
         self.picked = False
         self.cloud = None
         self.centroid = None
+        self.gazeboCentroid = [0, 0, 0]
 
 class PPickPlaceHandler( object ) :
 
-    def __init__( self, sceneNum = 1 ) :
+    def __init__( self ) :
         super( PPickPlaceHandler, self ).__init__()
         # define scene number
-        self.m_sceneNum = sceneNum
+        self.m_sceneNum = 1
         # object to pick ( type: DetectedObject )
         self.m_detectedObject = None
         # current world-joint angle
@@ -55,11 +59,20 @@ class PPickPlaceHandler( object ) :
         self.m_pubCollision = rospy.Publisher( '/pr2/3d_map/points',
                                                PointCloud2,
                                                queue_size = 1 )
+        # publisher for the markers of the correct labels
+        self.m_pubVizLabelsMarkers = rospy.Publisher( '/pipeline/classification/groundtruth',
+                                                      Marker,
+                                                      queue_size = 1 )
         # subscriber for the robot joint states
         self.m_subsJoints = rospy.Subscriber( '/joint_states',
                                               JointState,
                                               self.onMessageJointsReceived,
                                               queue_size = 1 )
+        # subscriber for the models states
+        self.m_subsModelsStates = rospy.Subscriber( '/gazebo/model_states',
+                                                    ModelStates,
+                                                    self.onMessageModelsStatesReceived,
+                                                    queue_size = 1 )
         # list of picked objects
         self.m_pickedList = []
         # initialize handler
@@ -68,6 +81,15 @@ class PPickPlaceHandler( object ) :
     def _initialize( self ) :
         # load parameters from parameter server
         _rosPickList = rospy.get_param( '/object_list' )
+        if len( _rosPickList ) == 3 :
+            self.m_sceneNum = 1
+        elif len( _rosPickList ) == 5 :
+            self.m_sceneNum = 2
+        elif len( _rosPickList ) == 8 :
+            self.m_sceneNum = 3
+        else :
+            print 'ERROR> NUMBER OF ITEMS FOR SCENE MISMATCH'
+        print 'SCENE: ', self.m_sceneNum
         # initialize pick list
         self.m_pickDict = {}
         for i in range( len( _rosPickList ) ) :
@@ -344,6 +366,29 @@ class PPickPlaceHandler( object ) :
         # get last joint value
         self.m_worldJointAngle = jointsMsg.position[-1]
         # print 'current worldjoint angle: ', self.m_worldJointAngle
+
+    def onMessageModelsStatesReceived( self, modelsStatesMsg ) : 
+        # get some of the data for less verbose usage
+        _names = modelsStatesMsg.name
+        _poses = modelsStatesMsg.pose
+        # check which models are in the pick dictionary
+        for i in range( len( _names ) ) :
+            # check if the model is in dictionary
+            if _names[i] not in self.m_pickDict :
+                continue
+            # Bounty -> get the required centroid
+            self.m_pickDict[_names[i]].gazeboCentroid[0] = _poses[i].position.x
+            self.m_pickDict[_names[i]].gazeboCentroid[1] = _poses[i].position.y
+            self.m_pickDict[_names[i]].gazeboCentroid[2] = _poses[i].position.z
+
+            # publish the correct labels of the pickobjects
+            _labelpos = [ _poses[i].position.x,
+                          _poses[i].position.y,
+                          ( _poses[i].position.z + 0.5 ) ]
+            # publish groundtruth label markers
+            _label = make_label( _names[i], _labelpos, 
+                                 1000 + i, color = [ 0.0, 1.0, 0.0 ] )
+            self.m_pubVizLabelsMarkers.publish( _label )
 
     def _hasReachedReference( self, current, reference ) :
         if abs( current - reference ) < 0.01 :
