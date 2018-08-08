@@ -1,6 +1,59 @@
 
 # **RoboND Perception Project: Object recognition and advanced pick & place**
 
+*   [**video 1 - just detection**](https://youtu.be/_-eAPI1gTGo)
+*   [**video 2 - whole pick-place process**](https://youtu.be/Jqd7IYW6iMg)
+
+---
+
+## **Running the project**
+
+### **Dependencies**
+
+This project depends on the [**sensor_stick**](https://github.com/udacity/RoboND-Perception-Exercises/tree/master/Exercise-3/sensor_stick) package, which you can copy from [**this**](https://github.com/udacity/RoboND-Perception-Exercises/tree/master/Exercise-3/sensor_stick) repository to your catkin_ws.
+
+### **Cloning the repo**
+    # clone the repo
+    cd YOUR_CATKIN_WS/src/
+    git clone https://github.com/wpumacay/RoboND-Perception-Project.git
+    cd .. 
+
+    # Install dependencies
+    rosdep install --from-paths src --ignore-src --rosdistro=kinetic -y
+    
+    # Adding the models to the path
+    export GAZEBO_MODEL_PATH=~/catkin_ws/src/RoboND-Perception-Project/pr2_robot/models:$GAZEBO_MODEL_PATH
+
+    # Build your workspace
+    catkin_make
+
+### Running the package
+
+    # launch the .launch file for the project
+    roslaunch pr2_robot pick_place_project.launch
+
+    # Change to this location, as the path to the models data may not be loaded
+    cd YOUR_CATKIN_WS/src/RoboND-Perception-Project/pr2_robot/scripts
+
+    # Just in case, make sure the perception pipeline is executable
+    chmod u+x perception_pipeline.py
+
+    # Run the pipeline from there
+    rosrun pr2_robot perception_pipeline.py
+
+    # Or just run it like this
+    ./perception_pipeline.py
+
+### Configuration
+
+Some configuration options are located in the [**pipeline.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file, and include :
+
+*   **model** : one of the trained models in the **data/models** folder ( default -> model_klinear_c128_n50_sz2000_C10 )
+*   **pickplace** : whether or not enable pick-place requests to the service ( default -> False )
+*   **save2yamls** : whether or not to save the result .dictionaries to a yaml file ( default -> True )
+
+---
+
 [//]: # (Image References)
 
 [gif_intro]: imgs/gif_world2_motion.gif
@@ -652,6 +705,7 @@ sess_kernel_poly_C_1.0_dg_3_gamma_1.0_nc_128_nn_50_size_8000 - 0.955375
 sess_kernel_poly_C_10.0_dg_3_gamma_1.0_nc_128_nn_50_size_8000 - 0.955375
 sess_kernel_poly_C_0.1_dg_2_gamma_1.0_nc_128_nn_150_size_16000 - 0.9550625
 ```
+It's worth noting that **we did not included rbf models, as the initial results gave very poor models**. The models overfitted quickly using this type of kernel.
 
 ### **_Results_**
 
@@ -702,7 +756,7 @@ And this is the confusion matrix we got after training :
 
 We first tried it with the configuration from before ( same filtering and clustering parameters ) and found that it didn't do a good joob at all, even though its accuracy was of **98%**. We found the problem after playing with the filtering and clustering parameters, changing the leafsize of the downsampling step.
 
-This allowed to have more points for the histograms, which made the features more representative to the model trained, as the model was trained with features got from a richer pointcloud ( not downsampled ). Even though normalization was applied to ensure that the histogram has values between 0-1, we found great improvements by reducing the downsampling.
+This allowed to have more points for the histograms, which made the features more representative to the model trained, as the model was trained with features obtained from a richer pointcloud ( not downsampled ). Even though normalization was applied to ensure that the histogram has values between 0-1 it still failed to generate good feature vectors. This is why we tweaked the downsampling size by reducing the leafsize of the voxel-grid filter.
 
 The model with the polynomial kernel got an **8/8** in scene 3, which the linear model could not achieve before proper tuning. However, it did not perform as well as the model with the linear kernel in scenes 1 and 2, as it missed one object in each case, so it seems it was not generalizing well enough.
 
@@ -841,7 +895,7 @@ Unfortunately, most than 50% of the pick-place request failed in the **pick** st
 
 ## CONCLUSIONS
 
-After the final impĺementation we got the required results and got the pick & place operation to work. These are some of the steps we successfully solved with the approach we followed :
+After the final implementation we got the required results and got the pick & place operation to work. These are some of the steps we successfully solved with the approach we followed :
 
 *   **An SVM with engineered features** is quite good at solving the task of recognizing the objects in the scene. We had to tweak a bit some parts of the pipeline for it to work correctly, but if done properly it yields good results.
 

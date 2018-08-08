@@ -200,6 +200,23 @@ class PPickPlaceHandler( object ) :
 
         return _yamldict, _resp
         
+    def save2yamls( self, objectList ) :
+        _dicts = []
+        # check which object should be picked
+        for _keylabel in self.m_pickDict :
+            for j in range( len( objectList ) ) :
+                # check if the requested object is in the pick dictionary
+                if objectList[j].label != _keylabel :
+                    continue
+                self.m_pickDict[_keylabel].cloud = objectList[j].cloud
+                self.m_pickDict[_keylabel].picked = True
+                self.m_pickDict[_keylabel].centroid = self._computeCentroid( objectList[j].cloud )
+                # pick the object using the service
+                _yamlDict, _ = self._pickObject( self.m_pickDict[_keylabel], callservice = False )
+                _dicts.append( _yamlDict )
+        
+        send_to_yaml( 'output_' + str( self.m_sceneNum ) + '.yaml', _dicts )
+
     """
     Makes the pr2 pick all the objects ...
     in the detected list ( if not picked yet )

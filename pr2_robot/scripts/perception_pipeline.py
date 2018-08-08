@@ -52,10 +52,12 @@ class PPipeline( object ) :
         self.m_pname = _rosPipelineParamsList[0]['name']
         self.m_pmodel = _rosPipelineParamsList[0]['model']
         self.m_ppickplace = _rosPipelineParamsList[0]['pickplace']
+        self.m_psave2yamls = _rosPipelineParamsList[0]['save2yamls']
 
         print 'pname: ', self.m_pname
         print 'pmodel: ', self.m_pmodel
         print 'ppickplace: ', self.m_ppickplace
+        print 'psave2yamls: ', self.m_psave2yamls
 
     def _createPipeline( self ) :
         # cloud filterer
@@ -67,7 +69,6 @@ class PPipeline( object ) :
         self.m_classifier.loadModel( '../data/models/' + self.m_pmodel + '.sav' )
         # self.m_classifier.loadModel( '../data/models/model_klinear_c128_n50_sz2000_C10.sav' )
         # self.m_classifier.loadModel( '../data/models/model_kpoly_deg3_c128_n50_sz2000_C10.sav' )
-        # self.m_classifier.loadModel( '../data/model_c255_n250_2000.sav' )
         # create pick-place handler
         self.m_pickplaceHandler = PPickPlaceHandler()
 
@@ -177,6 +178,10 @@ class PPipeline( object ) :
             # check if there are objects in the scene
             _detectedObjects, _sceneCloud = self._findObjects( cloudMsg )
             # if the pickplace flag is set in the parameter server, allow picking
+
+            if self.m_psave2yamls :
+                self.m_pickplaceHandler.save2yamls( _detectedObjects )
+
             if self.m_ppickplace :
                 # check if there is at least one object to pick
                 if ( len( _detectedObjects ) > 0 ) and \

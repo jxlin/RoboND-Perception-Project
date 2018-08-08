@@ -1,4 +1,5 @@
 pipeline:
   - name: perceptionPipeline
     model: model_klinear_c128_n50_sz2000_C10
-    pickplace: True
+    pickplace: False
+    save2yamls: True
