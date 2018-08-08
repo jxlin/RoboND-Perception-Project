@@ -4,6 +4,9 @@
 pr2_robot/scripts/tests/_results
 pr2_robot/scripts/tests/Confusion*
 pr2_robot/scripts/tests/Normalized*
-*.sav
 *.swp
 *.swo
+pr2_robot/scripts/tests/models/
+pr2_robot/scripts/dataset.sav
+pr2_robot/data/samples/
+pr2_robot/data/models/model_c255_n250_2000.sav

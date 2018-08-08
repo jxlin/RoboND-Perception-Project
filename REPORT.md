@@ -40,6 +40,9 @@
 [img_results_sc2_kpoly]: imgs/img_results_sc2_kpoly.png
 [img_results_sc3_kpoly]: imgs/img_results_sc3_kpoly.png
 
+[img_cmatrix_linear]: imgs/img_confusion_matrix_chosen_linear_model.png
+[img_cmatrix_poly]: imgs/img_confusion_matrix_chosen_poly_model.png
+
 [gif_results_sc1]: imgs/gif_results_sc1.gif
 [gif_results_sc2]: imgs/gif_results_sc2.gif
 [gif_results_sc3]: imgs/gif_results_sc3.gif
@@ -608,7 +611,7 @@ We defined a training **schedule** for the options we could take, and generated 
 
 We then run all the sessions and saved the results ( confusion matrices and scores ) for later checking, and also sorted to show the best in the top of the list saved. All models accuracies were obtained by using **5-fold** **crossvalidation**.
 
-The final results can be found in the [**resultsKlinear**]() and [**resultsKpoly**]() files. ( The following shows only the top 10 models, the full list can be found in the appropiate files)
+The final results can be found in the [**resultsKlinear**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/results/linear/resultsKlinear.txt) and [**resultsKpoly**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/results/poly/resultsKpoly.txt) files. ( The following shows only the top 10 models, the full list can be found in the appropiate files)
 
 ```txt
 TOP 10 LINEAR MODELS
@@ -663,6 +666,10 @@ For the linear case we used the following model :
 *   Training size : 100% of the dataset
 *   Regularization parameter : 10.0
 
+The resulting confusion matrix after training was the following :
+
+![CONFUSION MATRIX LINEAR MODEL][img_cmatrix_linear]
+
 This is the model that yield the better results when testing in simulation, as it passed the requirements with the following results :
 
 *   **3/3** in **test1.world**
@@ -688,6 +695,10 @@ For the polynomial case we used the following model :
 *   Training size : 100% of the dataset
 *   Regularization parameter : 10.0
 *   Degree : 3 ( cubic )
+
+And this is the confusion matrix we got after training :
+
+![CONFUSION MATRIX POLY MODEL][img_cmatrix_poly]
 
 We first tried it with the configuration from before ( same filtering and clustering parameters ) and found that it didn't do a good joob at all, even though its accuracy was of **98%**. We found the problem after playing with the filtering and clustering parameters, changing the leafsize of the downsampling step.
 
@@ -828,5 +839,30 @@ Unfortunately, most than 50% of the pick-place request failed in the **pick** st
 
 ![PICK PLACE FULL OPERATION FAIL][gif_pickplace_operation_grasp_fail]
 
-## FINAL COMMENTS AND FUTURE WORK
+## CONCLUSIONS
 
+After the final impĺementation we got the required results and got the pick & place operation to work. These are some of the steps we successfully solved with the approach we followed :
+
+*   **An SVM with engineered features** is quite good at solving the task of recognizing the objects in the scene. We had to tweak a bit some parts of the pipeline for it to work correctly, but if done properly it yields good results.
+
+*   **Picking the model** through experiments turned out to be helpful when tuning the parameters of the model. This led us to a model that satisfied the requirements of the project. However, this approach should be replaced by first picking the most important hyperparameters of the model, and doing the search in the space defined by only those, as it would save more time.
+
+*   **The use of high-level handlers** helps to make the pipeline more robust and easy to test. Again, we implemented the pipeline in separated modules, each being tested and tuned separately.
+
+We also found some problems that might arise because of how we approached to solve this problem :
+
+*   **The implementation is very sequential** and some specific requirements are necessary before going to the next step. If some step of the pipeline breaks, then the whole process is wrong. This can be fixed to some extent by making more robust high-level handlers of the low-level pipeline steps.
+
+*   **Problem of dealing with dynamic environments**, as we are updating the collision map assuming it will not change after we made the scan of a certain area.
+
+*   **The pointcloud filtering part** is the most compute-intensive of the whole pipeline. The python-pcl bindings work quite well, but in some parts ( specially with the statistical outlier removal ) it took too much time.
+
+## FUTURE WORK
+
+We think that adding some extras would be great, like :
+
+*   Adding some features to control both arms, or some section as to how to make this possible would be great. Perhaps after a second revision I will try a pull request to add some features to the project
+
+*   Fixing the gripper issue when picking objects, as it was also a bit recurrent in the kinematics project. I'm quite certain that is not an issue with the centroid, as I always checked in the simulator the location of the gripper when picking the objects. It even happened in simulation mode.
+
+*   Perhaps changing the properties of the simulator would help, as the simulation is a bit weird ( some objects don't fall the way they should, or keep floating around a pivot point when they should just fall naturally ). Perhaps the simulation configuration is being set to small quality, or something similar, that might be causing these weird artifacts.
