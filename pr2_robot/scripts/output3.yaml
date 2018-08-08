@@ -1,4 +1,50 @@
 object_list:
+- arm_name: right
+  object_name: snacks
+  pick_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0.42519351840019226
+      y: -0.32945457100868225
+      z: 0.7571556568145752
+  place_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0
+      y: -0.71
+      z: 0.605
+  test_scene_num: 3
+- arm_name: right
+  object_name: biscuits
+  pick_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0.5870815515518188
+      y: -0.21810661256313324
+      z: 0.7047041058540344
+  place_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0
+      y: -0.71
+      z: 0.605
+  test_scene_num: 3
 - arm_name: left
   object_name: sticky_notes
   pick_pose:
@@ -8,9 +54,9 @@ object_list:
       y: 0.0
       z: 0.0
     position:
-      x: 0.43925657868385315
-      y: 0.21631617844104767
-      z: 0.6801820993423462
+      x: 0.43953362107276917
+      y: 0.2149539440870285
+      z: 0.6853488683700562
   place_pose:
     orientation:
       w: 0.0
@@ -31,9 +77,9 @@ object_list:
       y: 0.0
       z: 0.0
     position:
-      x: 0.4926905930042267
-      y: 0.08362148702144623
-      z: 0.7268138527870178
+      x: 0.49184074997901917
+      y: 0.08378482609987259
+      z: 0.7290249466896057
   place_pose:
     orientation:
       w: 0.0
@@ -45,75 +91,6 @@ object_list:
       y: 0.71
       z: 0.605
   test_scene_num: 3
-- arm_name: right
-  object_name: snacks
-  pick_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0.42744210362434387
-      y: -0.3345699608325958
-      z: 0.7492286562919617
-  place_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0
-      y: -0.71
-      z: 0.605
-  test_scene_num: 3
-- arm_name: right
-  object_name: biscuits
-  pick_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0.5886790156364441
-      y: -0.21831785142421722
-      z: 0.7036117911338806
-  place_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0
-      y: -0.71
-      z: 0.605
-  test_scene_num: 3
-- arm_name: right
-  object_name: biscuits
-  pick_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0.6145000457763672
-      y: 0.13878849148750305
-      z: 0.683897852897644
-  place_pose:
-    orientation:
-      w: 0.0
-      x: 0.0
-      y: 0.0
-      z: 0.0
-    position:
-      x: 0
-      y: -0.71
-      z: 0.605
-  test_scene_num: 3
 - arm_name: left
   object_name: eraser
   pick_pose:
@@ -123,9 +100,32 @@ object_list:
       y: 0.0
       z: 0.0
     position:
-      x: 0.6079394817352295
-      y: 0.28220343589782715
-      z: 0.6467779278755188
+      x: 0.6077776551246643
+      y: 0.28097963333129883
+      z: 0.6462639570236206
+  place_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0
+      y: 0.71
+      z: 0.605
+  test_scene_num: 3
+- arm_name: left
+  object_name: glue
+  pick_pose:
+    orientation:
+      w: 0.0
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    position:
+      x: 0.6124483346939087
+      y: 0.13937269151210785
+      z: 0.6842559576034546
   place_pose:
     orientation:
       w: 0.0
@@ -146,9 +146,9 @@ object_list:
       y: 0.0
       z: 0.0
     position:
-      x: 0.4552263617515564
-      y: -0.04383528232574463
-      z: 0.6762515306472778
+      x: 0.45336437225341797
+      y: -0.04364120960235596
+      z: 0.6786755323410034
   place_pose:
     orientation:
       w: 0.0
@@ -169,9 +169,9 @@ object_list:
       y: 0.0
       z: 0.0
     position:
-      x: 0.6791549921035767
-      y: 0.0050223334692418575
-      z: 0.6750844120979309
+      x: 0.6787026524543762
+      y: 0.0034398455172777176
+      z: 0.6749668717384338
   place_pose:
     orientation:
       w: 0.0
