@@ -44,6 +44,16 @@
 [gif_results_sc2]: imgs/gif_results_sc2.gif
 [gif_results_sc3]: imgs/gif_results_sc3.gif
 
+[gif_pick_place_full]: imgs/gif_pick_place_full.gif
+[gif_pickplace_operation_grasp_fail]: imgs/gif_pickplace_operation_grasp_fail.gif
+
+[img_moveit_concepts]: imgs/img_moveit_concepts.png
+[img_collisionmap_pipeline]: imgs/img_collision_avoidance_filtering.png
+
+[img_collision_map_1]: imgs/img_collision_map_1.png
+
+[img_statemachine_pick_place]: imgs/img_statemachine_pick_place.png
+
 ## **About the project**
 
 This project consists in the implementation of the perception pipeline for a more advance **pick & place** task, which consists of a **PR2** robot picking objects from a table and placing them into the correct containers.
@@ -695,16 +705,128 @@ The model with the polynomial kernel got an **8/8** in scene 3, which the linear
 
 ## **Extra-pipeline implementation**
 
-We implemented the extra steps required for the pick-place service call operation. These include creating a collision map for the planner, and making the service call using the already extracted information for the detected objects.
+We implemented the extra steps required for the pick-place service call operation. These include creating a collision map for the planner, and making the service call using the already extracted information for the detected objects. In the following subsections we explain each part implemented.
 
-### _**Rotation**_
+### _**Collision Avoidance**_
 
-TODO
+In order for the pr2 robot to make a good plan to the object to pick it is necessary to update the collision map used for the planning process, as we don't want our robot to collide with other objects when trying to pick something.
 
-### _**Collision map**_
+This is achieved by publishing to the **_'/pr2/3d_map/points'_** topic, which is used by moveit to create the collision map.
 
-TODO
+For some information about these concepts, check [**this**](https://moveit.ros.org/documentation/concepts/) post.
+
+![MOVEIT CONCEPTS][img_moveit_concepts]
+
+Basically, moveit will create an occupancy map from the given pointcloud data coming to that topic, so our only concern is to send the right pointcloud, which should consists of all elements except the current pickable object.
+
+The simpler way we found to achieve this would be to filter out ( with a **cropbox** filter ) the cloud representing the current pickable object from the global scene cloud ( which of course has noise, so it has to be denoised a bit before proceeding ). We **already have these clouds**, as they are the results of the previous steps of the perception pipeline.
+
+![COLLISION MAP GENERATION][img_collisionmap_pipeline]
+
+To achieve this we would need to get the axis aligned bounding box representing the limits of the pickable object pointcloud. This can be easily done similar to the way be obtained the centroid of the pointcloud ( mean ). In our case we would just need to use **max** and **min** to get the appropiate ranges of the bounding box.
+
+Then, we just need to create a cropbox filter with those limits and extract the negative of the filter, which would successfully remove the object from the scene. This functionality can be found in the **_removeFromCloud** method, in the [**PPickPlaceHandler.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PPickPlaceHandler.py) file.
+
+```python
+    """
+    Removes a given subset cloud from a parent cloud.
+    For now, just using cropping based on the boundingbox
+    of the subset cloud
+
+    :param parentCloud : cloud to extract the child from - xyz cloud
+    :param childCloud : cloud to extract from the parent - xyz cloud
+    """
+    def _removeFromCloud( self, parentCloud, childCloud ) :
+        # compute AABB boundaries of child cloud
+        _min, _max = self._computeBoundingBox( childCloud )
+        # make the cropping filter
+        _cropBoxFilter = parentCloud.make_cropbox()
+        _cropBoxFilter.set_Negative( True )
+        _cropBoxFilter.set_Min( _min[0], _min[1], _min[2], 1.0 )
+        _cropBoxFilter.set_Max( _max[0], _max[1], _max[2], 1.0 )
+
+        return _cropBoxFilter.filter()
+```
+
+The following picture shows an example of this functionality in action.
+
+![COLLISION MAP 1][img_collision_map_1]
+
+### _**Robot motion**_
+
+The collision map created only represents the collidable parts in front of the robot, but we would like to have other parts of the scene to also be taken into account ( left and right parts of the table, and the objects in the boxes, if necessary ).
+
+To achieve this, we would need to add to the published pointcloud this parts of the scene, for which we need the robot to rotate in place to see those parts.
+
+This part is implemented in the [**PPickPlaceHandler.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PPickPlaceHandler.py), were we basically send requests to the topic **_'/pr2/world_joint_controller/command'_**, which controls the base joint of the robot.
+
+```python
+    class PPickPlaceHandler( object ) :
+
+        def __init__( self ) :
+
+            # ...
+
+            # publisher for robot base motion
+            self.m_pubBaseMotion = rospy.Publisher( '/pr2/world_joint_controller/command',
+                                                    Float64,
+                                                    queue_size = 10 )
+
+            # ...
+
+        # ...
+
+        def requestBaseMotion( self, angle ) :
+            print 'requesting base motion by angle: ', angle
+            self.m_pubBaseMotion.publish( ( angle * np.pi / 180.0 ) )
+
+        # ...
+
+        def _hasReachedReference( self, current, reference ) :
+            if abs( current - reference ) < 0.01 :
+                return True
+            return False
+
+        def makeRightScan( self, worldCloud ) :
+            self.requestBaseMotion( 120.0 )
+            if self._hasReachedReference( self.m_worldJointAngle, np.radians( 120.0 ) ) :
+                # add the current cloud to the collision map
+                self.addSideCollisionCloud( worldCloud )
+                return True
+            return False
+
+        def makeLeftScan( self, worldCloud ) :
+            self.requestBaseMotion( -120.0 )
+            if self._hasReachedReference( self.m_worldJointAngle, np.radians( -120.0 ) ) :
+                # add the current cloud to the collision map
+                self.addSideCollisionCloud( worldCloud )
+                return True
+            return False
+
+        def makeReturnScan( self ) :
+            self.requestBaseMotion( 0.0 )
+            if self._hasReachedReference( self.m_worldJointAngle, 0.0 ) :
+                return True
+            return False
+```
 
 ### _**Pick & place state machine**_
 
-TODO
+Finally, to combine all these steps we had to implement a system that would allows us to handle all the components we already have. At first, it was easy as we had just the pipeline; but now we have to combine them accordingly.
+
+This is done by adding a high level state machine that uses these different components, which is depicted in the following figure.
+
+![STATE MACHINE][img_statemachine_pick_place]
+
+This implementation can be found in the [**perception_pipeline.py**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception_pipeline.py) file, whose class **PPipeline** handles the different pipeline components with this state machine; and the actual operation is shown below.
+
+![PICK PLACE FULL OPERATION][gif_pick_place_full]
+
+The robot follows the state machine and successfully makes a pick & place operation. It also publishes the right collision map to avoid colliding with objects and parts of the scene.
+
+Unfortunately, most than 50% of the pick-place request failed in the **pick** step, as the robot doesn't have a mechanism to ensure it has actually picked the object. This is provided by the service, which waits a little till the gripper closes. This works sometimes, but sometime it doesn't quite grasp the object; and it's way more frequent than the previous kinematics project, which only happened very few times.
+
+![PICK PLACE FULL OPERATION FAIL][gif_pickplace_operation_grasp_fail]
+
+## FINAL COMMENTS AND FUTURE WORK
+
