@@ -46,10 +46,10 @@ This project depends on the [**sensor_stick**](https://github.com/udacity/RoboND
 
 ### Configuration
 
-Some configuration options are located in the [**pipeline.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/scripts/perception/PCloudFilter.py) file, and include :
+Some configuration options are located in the [**pipeline.yaml**](https://github.com/wpumacay/RoboND-Perception-Project/blob/master/pr2_robot/config/pipeline.yaml) file, and include :
 
 *   **model** : one of the trained models in the **data/models** folder ( default -> model_klinear_c128_n50_sz2000_C10 )
-*   **pickplace** : whether or not enable pick-place requests to the service ( default -> False )
+*   **pickplace** : whether or not to enable pick-place requests to the service ( default -> False )
 *   **save2yamls** : whether or not to save the result .dictionaries to a yaml file ( default -> True )
 
 ---
